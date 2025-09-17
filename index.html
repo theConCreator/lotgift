@@ -30,7 +30,7 @@
       justify-content: center;
     }
     .slot-strip {
-      transition: transform 2s cubic-bezier(0.25, 1, 0.5, 1);
+      will-change: transform;
     }
   </style>
 </head>
@@ -40,7 +40,7 @@
   <script type="text/javascript">
     const { useState, useEffect, useRef } = React;
 
-    // 🎁 Пример подарков (с JSON)
+    // 🎁 Пример подарков
     const gifts = [
       { name: "Hypno Lollipop", file: "./assets/gifts/Hypno Lollipop.json" },
       { name: "Desk Calendar", file: "./assets/gifts/Desk Calendar.json" },
@@ -48,7 +48,7 @@
       { name: "Lol Pop", file: "./assets/gifts/Lol Pop.json" }
     ];
 
-    // 🔹 Компонент подарка (рендерит JSON через Lottie)
+    // 🔹 Компонент одного подарка (Lottie)
     function GiftItem({ gift, autoplay }) {
       const ref = useRef(null);
       useEffect(() => {
@@ -68,31 +68,36 @@
       });
     }
 
-    // 🔹 Один барабан
-    function Reel({ spinning, finalGift }) {
-      const [items, setItems] = useState([]);
+    // 🔹 Барабан
+    function Reel({ spinning, finalGift, delay }) {
       const [offset, setOffset] = useState(0);
+      const stripRef = useRef(null);
+
+      // Полоска — несколько циклов подарков + финальный
+      const items = [];
+      for (let i = 0; i < 5; i++) {
+        items.push(...gifts);
+      }
+      if (finalGift) items.push(finalGift);
 
       useEffect(() => {
-        const newItems = [];
-        for (let i = 0; i < 15; i++) {
-          newItems.push(gifts[Math.floor(Math.random() * gifts.length)]);
-        }
-        if (finalGift) newItems.push(finalGift);
-        setItems(newItems);
-        setOffset(0);
+        if (!spinning || !finalGift) return;
+        const finalIndex = items.length - 1;
+        const targetOffset = -(finalIndex * 100);
 
-        if (spinning && finalGift) {
-          requestAnimationFrame(() => {
-            const finalIndex = newItems.length - 1;
-            setOffset(-(finalIndex * 100));
-          });
-        }
+        // небольшая задержка для "поочередной" остановки
+        const t = setTimeout(() => {
+          stripRef.current.style.transition = "transform 2s cubic-bezier(0.25, 1, 0.5, 1)";
+          setOffset(targetOffset);
+        }, delay);
+
+        return () => clearTimeout(t);
       }, [spinning, finalGift]);
 
       return (
         React.createElement("div", { className: "slot-window" },
           React.createElement("div", {
+            ref: stripRef,
             className: "slot-strip",
             style: { transform: `translateY(${offset}px)` }
           },
@@ -114,7 +119,7 @@
       const [final, setFinal] = useState([null, null, null]);
       const machineRef = useRef(null);
 
-      // Загружаем фон-автомат
+      // Фон автомата
       useEffect(() => {
         if (!machineRef.current) return;
         lottie.loadAnimation({
@@ -138,16 +143,16 @@
 
         setTimeout(() => {
           setSpinning(false);
-        }, 2000);
+        }, 3000); // общее время
       };
 
       return (
         React.createElement("div", { className: "flex flex-col items-center" },
           React.createElement("div", { className: "relative w-[400px] h-[400px] flex items-center justify-center" },
-            // Барабаны (горизонтально, сзади)
+            // Барабаны (сзади)
             React.createElement("div", { className: "absolute flex gap-4 z-0" },
               final.map((gift, i) =>
-                React.createElement(Reel, { key: i, spinning, finalGift: gift })
+                React.createElement(Reel, { key: i, spinning, finalGift: gift, delay: i * 300 })
               )
             ),
             // Автомат (поверх)
