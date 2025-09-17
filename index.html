@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Telegram Slot Machine 🎰</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React + ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <!-- Lottie -->
+  <script src="https://unpkg.com/lottie-web/build/player/lottie_light.min.js"></script>
+  <style>
+    body { background: linear-gradient(to bottom, #2e026d, #000); }
+  </style>
+</head>
+<body class="text-white flex items-center justify-center min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/javascript">
+    const { useState } = React;
+
+    // 🎁 Подарки
+    const gifts = [
+      {name:"Hypno Lollipop",price:1.77}, {name:"Desk Calendar",price:1.31},
+      {name:"B-Day Candle",price:1.32}, {name:"Lol Pop",price:1.32},
+      {name:"Lunar Snake",price:1.38}, {name:"Snake Box",price:1.36},
+      {name:"Xmas Stocking",price:1.38}, {name:"Whip Cupcake",price:1.38},
+      {name:"Candy Cane",price:1.48}, {name:"Pet Snake",price:1.58},
+      {name:"Jester Hat",price:1.62}, {name:"Snoop Dogg",price:1.64},
+      {name:"Homemade Cake",price:1.7}, {name:"Holiday Drink",price:1.7},
+      {name:"Jingle Bells",price:1.74}, {name:"Cookie Heart",price:1.75},
+      {name:"Big Year",price:1.78}, {name:"Party Sparkler",price:1.8},
+      {name:"Winter Wreath",price:1.79}, {name:"Swag Bag",price:1.91},
+      {name:"Tama Gadget",price:1.93}, {name:"Ginger Cookie",price:1.95},
+      {name:"Moon Pendant",price:1.96}, {name:"Jack-in-the-Box",price:2.01},
+      {name:"Spiced Wine",price:2.12}, {name:"Stellar Rocket",price:2.19},
+      {name:"Star Notepad",price:2.32}, {name:"Easter Egg",price:2.46},
+      {name:"Restless Jar",price:2.5}, {name:"Santa Hat",price:2.6},
+      {name:"Snow Globe",price:2.65}, {name:"Hex Pot",price:2.7},
+      {name:"Joyful Bundle",price:2.71}, {name:"Lush Bouquet",price:2.84},
+      {name:"Witch Hat",price:2.86}, {name:"Light Sword",price:3.13},
+      {name:"Spy Agaric",price:3.2}, {name:"Bow Tie",price:3.22},
+      {name:"Eternal Candle",price:3.38}, {name:"Bunny Muffin",price:3.34},
+      {name:"Jelly Bunny",price:3.43}, {name:"Berry Box",price:3.58},
+      {name:"Evil Eye",price:3.6}, {name:"Snow Mittens",price:3.67},
+      {name:"Valentine Box",price:4.2}, {name:"Snoop Cigar",price:4.26},
+      {name:"Sakura Flower",price:4.77}, {name:"Hanging Star",price:5.26},
+      {name:"Jolly Chimp",price:5.34}, {name:"Sleigh Bell",price:7.63},
+      {name:"Skull Flower",price:7.7}, {name:"Crystal Ball",price:7.86},
+      {name:"Record Player",price:7.91}, {name:"Love Candle",price:7.94},
+      {name:"Top Hat",price:7.99}, {name:"Trapped Heart",price:8.69},
+      {name:"Love Potion",price:8.79}, {name:"Flying Broom",price:9.45},
+      {name:"Cupid Charm",price:11.26}, {name:"Eternal Rose",price:13.71},
+      {name:"Ionic Dryer",price:14.21}, {name:"Diamond Ring",price:16.39},
+      {name:"Voodoo Doll",price:16.43}, {name:"Mad Pumpkin",price:17.91},
+      {name:"Toy Bear",price:19.3}, {name:"Vintage Cigar",price:23.98},
+      {name:"Low Rider",price:24.8}, {name:"Signet Ring",price:25.1},
+      {name:"Neko Helmet",price:26.41}, {name:"Electric Skull",price:31},
+      {name:"Kissed Frog",price:34}, {name:"Swiss Watch",price:35},
+      {name:"Sharp Tongue",price:39.69}, {name:"Scared Cat",price:43.6},
+      {name:"Genie Lamp",price:47.07}, {name:"Westside Sign",price:51.27},
+      {name:"Bonded Ring",price:54.99}, {name:"Gem Signet",price:72.98},
+      {name:"Magic Potion",price:72.98}, {name:"Ion Gem",price:83},
+      {name:"Astral Shard",price:95.97}, {name:"Perfume Bottle",price:95.99},
+      {name:"Loot Bag",price:90.1}, {name:"Mini Oscar",price:123.89},
+      {name:"Nail Bracelet",price:129.84}, {name:"Heroic Helmet",price:219.99},
+      {name:"Precious Peach",price:379.99}, {name:"Durov’s Cap",price:794.9},
+      {name:"Heart Locket",price:1450}, {name:"Plush Pepe",price:5199}
+    ];
+
+    // 📦 Компонент SlotMachine
+    function SlotMachine() {
+      const [slots, setSlots] = useState([null, null, null]);
+      const [spinning, setSpinning] = useState(false);
+      const [result, setResult] = useState(null);
+
+      const spin = () => {
+        setSpinning(true);
+        setResult(null);
+
+        let ticks = 0;
+        const interval = setInterval(() => {
+          setSlots([
+            gifts[Math.floor(Math.random() * gifts.length)],
+            gifts[Math.floor(Math.random() * gifts.length)],
+            gifts[Math.floor(Math.random() * gifts.length)],
+          ]);
+          ticks++;
+          if (ticks > 20) { // 2 секунды "прокрутка"
+            clearInterval(interval);
+            setSpinning(false);
+
+            const final = [
+              gifts[Math.floor(Math.random() * gifts.length)],
+              gifts[Math.floor(Math.random() * gifts.length)],
+              gifts[Math.floor(Math.random() * gifts.length)],
+            ];
+            setSlots(final);
+
+            if (final[0].name === final[1].name && final[1].name === final[2].name) {
+              setResult(`🎉 Ты выиграл ${final[0].name}!`);
+            } else {
+              setResult("Попробуй снова 😉");
+            }
+          }
+        }, 100);
+      };
+
+      return (
+        React.createElement("div", { className: "flex flex-col items-center" },
+          // Автомат (фон)
+          React.createElement("div", { className: "relative w-[400px] h-[400px]" },
+            React.createElement("div", {
+              id: "slot-machine",
+              className: "absolute inset-0"
+            }),
+            React.createElement("div", { className: "absolute top-[120px] left-[70px] flex gap-8" },
+              slots.map((gift, i) =>
+                React.createElement("div", {
+                  key: i,
+                  className: "w-[80px] h-[80px] bg-white rounded flex items-center justify-center"
+                },
+                  gift ? gift.name : "?"
+                )
+              )
+            )
+          ),
+          React.createElement("button", {
+            onClick: spin,
+            disabled: spinning,
+            className: "mt-4 px-6 py-2 bg-purple-600 text-white rounded-xl shadow-lg disabled:opacity-50"
+          }, spinning ? "Крутим..." : "Spin 🎰"),
+          result && React.createElement("p", { className: "mt-3 text-xl" }, result)
+        )
+      );
+    }
+
+    // Рендер
+    ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(SlotMachine));
+
+    // Загружаем Lottie автомат
+    lottie.loadAnimation({
+      container: document.getElementById("slot-machine"),
+      renderer: "svg",
+      loop: true,
+      autoplay: true,
+      path: "assets/777.json"
+    });
+  </script>
+</body>
+</html>
