@@ -12,54 +12,99 @@
   <!-- Lottie -->
   <script src="https://unpkg.com/lottie-web/build/player/lottie_light.min.js"></script>
   <style>
-    body { background: linear-gradient(to bottom, #2e026d, #000); }
-    .slot { width: 80px; height: 80px; background: white; border-radius: 12px; overflow: hidden; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden; /* 🚫 убираем скролл */
+      background: linear-gradient(to bottom, #2e026d, #000);
+    }
+    .slot-window {
+      width: 100px;
+      height: 100px;
+      overflow: hidden;
+      border-radius: 12px;
+      background: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .slot-strip {
+      transition: transform 2s cubic-bezier(0.25, 1, 0.5, 1);
+    }
   </style>
 </head>
-<body class="text-white flex items-center justify-center min-h-screen">
+<body class="text-white flex items-center justify-center h-screen w-screen">
   <div id="root"></div>
 
   <script type="text/javascript">
     const { useState, useEffect, useRef } = React;
 
-    // 🎁 Подарки (пример)
+    // 🎁 Пример подарков (с пробелами)
     const gifts = [
-      { name: "Hypno Lollipop", price: 1.77, file: "./assets/gifts/Hypno Lollipop.json" },
-      { name: "Desk Calendar", price: 1.31, file: "./assets/gifts/Desk Calendar.json" },
-      { name: "B-Day Candle", price: 1.32, file: "./assets/gifts/B-Day Candle.json" },
-      { name: "Lol Pop", price: 1.32, file: "./assets/gifts/Lol Pop.json" }
+      { name: "Hypno Lollipop", file: "./assets/gifts/Hypno Lollipop.json" },
+      { name: "Desk Calendar", file: "./assets/gifts/Desk Calendar.json" },
+      { name: "B-Day Candle", file: "./assets/gifts/B-Day Candle.json" },
+      { name: "Lol Pop", file: "./assets/gifts/Lol Pop.json" }
     ];
 
-    // 🔹 Слот
-    function Slot({ gift, spinning }) {
-      const ref = useRef(null);
+    // 🔹 Один барабан
+    function Reel({ spinning, finalGift }) {
+      const containerRef = useRef(null);
+      const [offset, setOffset] = useState(0);
+      const items = [...Array(10)].map(() => gifts[Math.floor(Math.random() * gifts.length)]);
+      const finalIndex = Math.floor(Math.random() * gifts.length);
 
       useEffect(() => {
-        if (!gift) return;
-        ref.current.innerHTML = "";
+        if (spinning) {
+          setOffset(-(items.length * 100 - (finalIndex * 100))); // прокрутка вниз с остановкой
+        } else {
+          setOffset(-(finalIndex * 100));
+        }
+      }, [spinning]);
 
-        lottie.loadAnimation({
-          container: ref.current,
-          renderer: "svg",
-          loop: false,
-          autoplay: !spinning, // во время прокрутки — стоп-кадр
-          path: gift.file,
-        });
-      }, [gift, spinning]);
+      useEffect(() => {
+        if (!spinning && finalGift) {
+          // после остановки загружаем анимацию финального подарка
+          const node = containerRef.current.querySelector(`#slot-${finalGift.name.replace(/\s/g, '-')}`);
+          if (node) {
+            node.innerHTML = "";
+            lottie.loadAnimation({
+              container: node,
+              renderer: "svg",
+              loop: false,
+              autoplay: true,
+              path: finalGift.file,
+            });
+          }
+        }
+      }, [spinning, finalGift]);
 
-      return React.createElement("div", { className: "slot flex items-center justify-center" },
-        React.createElement("div", { ref })
+      return (
+        React.createElement("div", { className: "slot-window" },
+          React.createElement("div", {
+            className: "slot-strip",
+            style: { transform: `translateY(${offset}px)` }
+          },
+            items.map((gift, i) =>
+              React.createElement("div", {
+                key: i,
+                id: `slot-${gift.name.replace(/\s/g, '-')}`,
+                className: "flex items-center justify-center w-[100px] h-[100px]"
+              }, gift.name)
+            )
+          )
+        )
       );
     }
 
     // 🎰 Автомат
     function SlotMachine() {
-      const [slots, setSlots] = useState([null, null, null]);
       const [spinning, setSpinning] = useState(false);
-      const [result, setResult] = useState(null);
+      const [final, setFinal] = useState([null, null, null]);
       const machineRef = useRef(null);
 
-      // Загружаем фон-автомат после рендера
+      // Загружаем фон-автомат
       useEffect(() => {
         if (!machineRef.current) return;
         lottie.loadAnimation({
@@ -72,44 +117,28 @@
       }, []);
 
       const spin = () => {
+        if (spinning) return;
         setSpinning(true);
-        setResult(null);
+        const results = [
+          gifts[Math.floor(Math.random() * gifts.length)],
+          gifts[Math.floor(Math.random() * gifts.length)],
+          gifts[Math.floor(Math.random() * gifts.length)]
+        ];
+        setFinal(results);
 
-        const interval = setInterval(() => {
-          setSlots([
-            gifts[Math.floor(Math.random() * gifts.length)],
-            gifts[Math.floor(Math.random() * gifts.length)],
-            gifts[Math.floor(Math.random() * gifts.length)],
-          ]);
-        }, 100);
-
-        // Остановка через 3 сек
+        // останавливаем через 2с
         setTimeout(() => {
-          clearInterval(interval);
           setSpinning(false);
-
-          const final = [
-            gifts[Math.floor(Math.random() * gifts.length)],
-            gifts[Math.floor(Math.random() * gifts.length)],
-            gifts[Math.floor(Math.random() * gifts.length)],
-          ];
-          setSlots(final);
-
-          if (final[0].name === final[1].name && final[1].name === final[2].name) {
-            setResult(`🎉 Ты выиграл ${final[0].name}!`);
-          } else {
-            setResult("Попробуй снова 😉");
-          }
-        }, 3000);
+        }, 2000);
       };
 
       return (
         React.createElement("div", { className: "flex flex-col items-center" },
-          React.createElement("div", { className: "relative w-[400px] h-[400px]" },
+          React.createElement("div", { className: "relative w-[400px] h-[400px] flex items-center justify-center" },
             // Барабаны (сзади)
-            React.createElement("div", { className: "absolute top-[120px] left-[70px] flex gap-8 z-0" },
-              slots.map((gift, i) =>
-                React.createElement(Slot, { key: i, gift, spinning })
+            React.createElement("div", { className: "absolute flex gap-4 z-0" },
+              final.map((gift, i) =>
+                React.createElement(Reel, { key: i, spinning, finalGift: gift })
               )
             ),
             // Автомат (поверх)
@@ -118,9 +147,8 @@
           React.createElement("button", {
             onClick: spin,
             disabled: spinning,
-            className: "mt-4 px-6 py-2 bg-purple-600 text-white rounded-xl shadow-lg disabled:opacity-50"
-          }, spinning ? "Крутим..." : "Spin 🎰"),
-          result && React.createElement("p", { className: "mt-3 text-xl" }, result)
+            className: "mt-6 px-6 py-2 bg-purple-600 text-white rounded-xl shadow-lg disabled:opacity-50"
+          }, spinning ? "Крутим..." : "Spin 🎰")
         )
       );
     }
