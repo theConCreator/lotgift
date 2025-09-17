@@ -16,7 +16,7 @@
       margin: 0;
       padding: 0;
       height: 100%;
-      overflow: hidden; /* 🚫 убираем скролл */
+      overflow: hidden;
       background: linear-gradient(to bottom, #2e026d, #000);
     }
     .slot-window {
@@ -40,7 +40,7 @@
   <script type="text/javascript">
     const { useState, useEffect, useRef } = React;
 
-    // 🎁 Пример подарков
+    // 🎁 Пример подарков (с JSON)
     const gifts = [
       { name: "Hypno Lollipop", file: "./assets/gifts/Hypno Lollipop.json" },
       { name: "Desk Calendar", file: "./assets/gifts/Desk Calendar.json" },
@@ -48,26 +48,41 @@
       { name: "Lol Pop", file: "./assets/gifts/Lol Pop.json" }
     ];
 
+    // 🔹 Компонент подарка (рендерит JSON через Lottie)
+    function GiftItem({ gift, autoplay }) {
+      const ref = useRef(null);
+      useEffect(() => {
+        if (!gift || !ref.current) return;
+        ref.current.innerHTML = "";
+        lottie.loadAnimation({
+          container: ref.current,
+          renderer: "svg",
+          loop: false,
+          autoplay: autoplay,
+          path: gift.file,
+        });
+      }, [gift, autoplay]);
+      return React.createElement("div", {
+        ref,
+        className: "flex items-center justify-center w-[100px] h-[100px]"
+      });
+    }
+
     // 🔹 Один барабан
     function Reel({ spinning, finalGift }) {
-      const stripRef = useRef(null);
       const [items, setItems] = useState([]);
       const [offset, setOffset] = useState(0);
 
       useEffect(() => {
-        // генерируем 20 случайных подарков + финальный в конце
         const newItems = [];
-        for (let i = 0; i < 20; i++) {
+        for (let i = 0; i < 15; i++) {
           newItems.push(gifts[Math.floor(Math.random() * gifts.length)]);
         }
         if (finalGift) newItems.push(finalGift);
         setItems(newItems);
-
-        // сброс на начало
         setOffset(0);
 
         if (spinning && finalGift) {
-          // ждём один тик чтобы CSS transition отработал
           requestAnimationFrame(() => {
             const finalIndex = newItems.length - 1;
             setOffset(-(finalIndex * 100));
@@ -75,36 +90,18 @@
         }
       }, [spinning, finalGift]);
 
-      // после остановки запускаем анимацию победного подарка
-      useEffect(() => {
-        if (!spinning && finalGift) {
-          const node = stripRef.current.querySelector(`#slot-${finalGift.name.replace(/\s/g, '-')}`);
-          if (node) {
-            node.innerHTML = "";
-            lottie.loadAnimation({
-              container: node,
-              renderer: "svg",
-              loop: false,
-              autoplay: true,
-              path: finalGift.file,
-            });
-          }
-        }
-      }, [spinning, finalGift]);
-
       return (
         React.createElement("div", { className: "slot-window" },
           React.createElement("div", {
-            ref: stripRef,
             className: "slot-strip",
             style: { transform: `translateY(${offset}px)` }
           },
             items.map((gift, i) =>
-              React.createElement("div", {
+              React.createElement(GiftItem, {
                 key: i,
-                id: `slot-${gift.name.replace(/\s/g, '-')}`,
-                className: "flex items-center justify-center w-[100px] h-[100px] text-black"
-              }, gift.name)
+                gift,
+                autoplay: (!spinning && finalGift && i === items.length - 1)
+              })
             )
           )
         )
@@ -139,7 +136,6 @@
         setFinal(results);
         setSpinning(true);
 
-        // выключаем режим через 2с
         setTimeout(() => {
           setSpinning(false);
         }, 2000);
@@ -148,7 +144,7 @@
       return (
         React.createElement("div", { className: "flex flex-col items-center" },
           React.createElement("div", { className: "relative w-[400px] h-[400px] flex items-center justify-center" },
-            // Барабаны (сзади)
+            // Барабаны (горизонтально, сзади)
             React.createElement("div", { className: "absolute flex gap-4 z-0" },
               final.map((gift, i) =>
                 React.createElement(Reel, { key: i, spinning, finalGift: gift })
