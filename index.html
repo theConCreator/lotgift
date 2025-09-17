@@ -22,7 +22,7 @@
   <script type="text/javascript">
     const { useState, useEffect, useRef } = React;
 
-    // 🎁 Подарки
+    // 🎁 Подарки (с пробелами в названиях файлов)
     const gifts = [
       { name: "Hypno Lollipop", price: 1.77, file: "./assets/gifts/Hypno Lollipop.json" },
       { name: "Desk Calendar", price: 1.31, file: "./assets/gifts/Desk Calendar.json" },
@@ -39,13 +39,13 @@
 
       useEffect(() => {
         if (!gift) return;
-        ref.current.innerHTML = ""; // очистка перед загрузкой
+        ref.current.innerHTML = ""; // очистка контейнера
 
         lottie.loadAnimation({
           container: ref.current,
           renderer: "svg",
           loop: false,
-          autoplay: !spinning, // если крутим — заморожен первый кадр
+          autoplay: !spinning, // при прокрутке — заморожен кадр
           path: gift.file,
         });
       }, [gift, spinning]);
@@ -73,35 +73,39 @@
             gifts[Math.floor(Math.random() * gifts.length)],
           ]);
           ticks++;
-          if (ticks > 20) {
-            clearInterval(interval);
-            setSpinning(false);
-
-            const final = [
-              gifts[Math.floor(Math.random() * gifts.length)],
-              gifts[Math.floor(Math.random() * gifts.length)],
-              gifts[Math.floor(Math.random() * gifts.length)],
-            ];
-            setSlots(final);
-
-            if (final[0].name === final[1].name && final[1].name === final[2].name) {
-              setResult(`🎉 Ты выиграл ${final[0].name}!`);
-            } else {
-              setResult("Попробуй снова 😉");
-            }
-          }
         }, 100);
+
+        // Останавливаем через 3 секунды
+        setTimeout(() => {
+          clearInterval(interval);
+          setSpinning(false);
+
+          const final = [
+            gifts[Math.floor(Math.random() * gifts.length)],
+            gifts[Math.floor(Math.random() * gifts.length)],
+            gifts[Math.floor(Math.random() * gifts.length)],
+          ];
+          setSlots(final);
+
+          if (final[0].name === final[1].name && final[1].name === final[2].name) {
+            setResult(`🎉 Ты выиграл ${final[0].name}!`);
+          } else {
+            setResult("Попробуй снова 😉");
+          }
+        }, 3000);
       };
 
       return (
         React.createElement("div", { className: "flex flex-col items-center" },
           React.createElement("div", { className: "relative w-[400px] h-[400px]" },
-            React.createElement("div", { id: "slot-machine", className: "absolute inset-0" }),
-            React.createElement("div", { className: "absolute top-[120px] left-[70px] flex gap-8" },
+            // Барабаны (сзади)
+            React.createElement("div", { className: "absolute top-[120px] left-[70px] flex gap-8 z-0" },
               slots.map((gift, i) =>
                 React.createElement(Slot, { key: i, gift, spinning })
               )
-            )
+            ),
+            // Автомат (поверх)
+            React.createElement("div", { id: "slot-machine", className: "absolute inset-0 z-10" })
           ),
           React.createElement("button", {
             onClick: spin,
