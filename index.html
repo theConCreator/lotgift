@@ -22,30 +22,27 @@
   <script type="text/javascript">
     const { useState, useEffect, useRef } = React;
 
-    // 🎁 Подарки (с пробелами в названиях файлов)
+    // 🎁 Подарки (пример)
     const gifts = [
       { name: "Hypno Lollipop", price: 1.77, file: "./assets/gifts/Hypno Lollipop.json" },
       { name: "Desk Calendar", price: 1.31, file: "./assets/gifts/Desk Calendar.json" },
       { name: "B-Day Candle", price: 1.32, file: "./assets/gifts/B-Day Candle.json" },
-      { name: "Lol Pop", price: 1.32, file: "./assets/gifts/Lol Pop.json" },
-      { name: "Lunar Snake", price: 1.38, file: "./assets/gifts/Lunar Snake.json" },
-      { name: "Snake Box", price: 1.36, file: "./assets/gifts/Snake Box.json" },
-      // 👉 добавь остальные по списку
+      { name: "Lol Pop", price: 1.32, file: "./assets/gifts/Lol Pop.json" }
     ];
 
-    // 🔹 Один слот (ячейка)
+    // 🔹 Слот
     function Slot({ gift, spinning }) {
       const ref = useRef(null);
 
       useEffect(() => {
         if (!gift) return;
-        ref.current.innerHTML = ""; // очистка контейнера
+        ref.current.innerHTML = "";
 
         lottie.loadAnimation({
           container: ref.current,
           renderer: "svg",
           loop: false,
-          autoplay: !spinning, // при прокрутке — заморожен кадр
+          autoplay: !spinning, // во время прокрутки — стоп-кадр
           path: gift.file,
         });
       }, [gift, spinning]);
@@ -60,22 +57,33 @@
       const [slots, setSlots] = useState([null, null, null]);
       const [spinning, setSpinning] = useState(false);
       const [result, setResult] = useState(null);
+      const machineRef = useRef(null);
+
+      // Загружаем фон-автомат после рендера
+      useEffect(() => {
+        if (!machineRef.current) return;
+        lottie.loadAnimation({
+          container: machineRef.current,
+          renderer: "svg",
+          loop: true,
+          autoplay: true,
+          path: "./assets/777.json"
+        });
+      }, []);
 
       const spin = () => {
         setSpinning(true);
         setResult(null);
 
-        let ticks = 0;
         const interval = setInterval(() => {
           setSlots([
             gifts[Math.floor(Math.random() * gifts.length)],
             gifts[Math.floor(Math.random() * gifts.length)],
             gifts[Math.floor(Math.random() * gifts.length)],
           ]);
-          ticks++;
         }, 100);
 
-        // Останавливаем через 3 секунды
+        // Остановка через 3 сек
         setTimeout(() => {
           clearInterval(interval);
           setSpinning(false);
@@ -105,7 +113,7 @@
               )
             ),
             // Автомат (поверх)
-            React.createElement("div", { id: "slot-machine", className: "absolute inset-0 z-10" })
+            React.createElement("div", { ref: machineRef, className: "absolute inset-0 z-50" })
           ),
           React.createElement("button", {
             onClick: spin,
@@ -118,15 +126,6 @@
     }
 
     ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(SlotMachine));
-
-    // Фон автомата
-    lottie.loadAnimation({
-      container: document.getElementById("slot-machine"),
-      renderer: "svg",
-      loop: true,
-      autoplay: true,
-      path: "./assets/777.json"
-    });
   </script>
 </body>
 </html>
