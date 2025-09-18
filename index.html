@@ -20,7 +20,6 @@
       font-family: sans-serif;
     }
     .machine {
-      position: relative;
       display: flex;
       gap: 10px;
       padding: 20px;
@@ -34,10 +33,6 @@
       overflow: hidden;
       border: 2px solid #555;
       background: black;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
     }
     .strip {
       display: flex;
@@ -77,85 +72,52 @@
     ];
 
     const ITEM_SIZE = 120;
-    const BUFFER_TOP = 5;
-    const BUFFER_BOTTOM = 5;
-    const TOTAL_ITEMS = gifts.length;
+    const REPEAT_COUNT = 50; // лента в 50 циклов
 
     function Reel({ finalIndex, stopDelay, spinning }) {
       const stripRef = React.useRef(null);
       const posRef = React.useRef(0);
       const rafRef = React.useRef(null);
-      const lastTsRef = React.useRef(null);
       const runningRef = React.useRef(false);
+      const items = [];
 
-      const [startIndex, setStartIndex] = React.useState(0);
-      const [visibleIndices, setVisibleIndices] = React.useState(
-        Array.from({length: BUFFER_TOP + 1 + BUFFER_BOTTOM}, (_,i)=>i)
-      );
-
-      // Генерация списка индексов для рендера
-      function makeVisibleIndices(start) {
-        return Array.from(
-          {length: BUFFER_TOP + 1 + BUFFER_BOTTOM},
-          (_, i) => (start + i) % TOTAL_ITEMS
-        );
+      for (let i = 0; i < REPEAT_COUNT; i++) {
+        for (let g of gifts) {
+          items.push(<div className="item" key={i+"-"+g.name}>{g.name}</div>);
+        }
       }
+      const totalHeight = gifts.length * ITEM_SIZE * REPEAT_COUNT;
 
       React.useEffect(() => {
         if (spinning) {
           runningRef.current = true;
-          lastTsRef.current = null;
-
-          function step(ts) {
+          function step() {
             if (!runningRef.current) return;
-            if (lastTsRef.current == null) lastTsRef.current = ts;
-            const dt = ts - lastTsRef.current;
-            lastTsRef.current = ts;
-
-            posRef.current += 0.35 * dt; // скорость
-
-            const currentIndex = Math.floor(posRef.current / ITEM_SIZE);
-            const desiredStart = Math.max(0, currentIndex - BUFFER_TOP);
-
-            if (desiredStart !== startIndex) {
-              setStartIndex(desiredStart);
-              setVisibleIndices(makeVisibleIndices(desiredStart));
-            }
-
-            const relOffset = posRef.current - desiredStart * ITEM_SIZE;
-            if (stripRef.current) {
-              stripRef.current.style.transition = 'none';
-              stripRef.current.style.transform = `translateY(-${relOffset}px)`;
-            }
-
+            posRef.current += 20; // скорость
+            const mod = posRef.current % totalHeight;
+            stripRef.current.style.transform = `translateY(-${mod}px)`;
             rafRef.current = requestAnimationFrame(step);
           }
           rafRef.current = requestAnimationFrame(step);
 
           const stopTimer = setTimeout(() => {
-            // ❌ Останавливаем rAF
             runningRef.current = false;
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
 
             const currentIndex = Math.floor(posRef.current / ITEM_SIZE);
             const loops = 3;
-            const targetIndex = currentIndex + loops * TOTAL_ITEMS + finalIndex;
+            const targetIndex = currentIndex + loops * gifts.length + finalIndex;
             const offset = targetIndex * ITEM_SIZE;
 
-            const relTarget = offset - startIndex * ITEM_SIZE;
-            if (stripRef.current) {
-              stripRef.current.style.transition = `transform 0.8s ease-out`;
-              stripRef.current.style.transform = `translateY(-${relTarget}px)`;
+            stripRef.current.style.transition = "transform 0.8s ease-out";
+            stripRef.current.style.transform = `translateY(-${offset}px)`;
 
-              stripRef.current.addEventListener("transitionend", () => {
-                stripRef.current.style.transition = "";
-                const reset = finalIndex * ITEM_SIZE;
-                stripRef.current.style.transform = `translateY(-${reset}px)`;
-                posRef.current = reset;
-                setStartIndex(0);
-                setVisibleIndices(makeVisibleIndices(0));
-              }, { once: true });
-            }
+            stripRef.current.addEventListener("transitionend", () => {
+              stripRef.current.style.transition = "";
+              const reset = finalIndex * ITEM_SIZE;
+              stripRef.current.style.transform = `translateY(-${reset}px)`;
+              posRef.current = reset;
+            }, {once:true});
           }, stopDelay);
 
           return () => clearTimeout(stopTimer);
@@ -165,9 +127,7 @@
       return (
         <div className="reel">
           <div className="strip" ref={stripRef}>
-            {visibleIndices.map((idx, i) => (
-              <div key={i} className="item">{gifts[idx].name}</div>
-            ))}
+            {items}
           </div>
         </div>
       );
