@@ -134,18 +134,18 @@ function SlotItem({giftIndex, staticSvgs, animate}){
 
 function Reel({ spinning, finalGift, staticSvgs, stopDelay, onStop }){
   const stripRef=useRef(null);
-  const [pos,setPos]=useState(0);
   const [animTrigger,setAnimTrigger]=useState(false);
-  const speedRef=useRef(35);
+  const posRef=useRef(0);
   const reqRef=useRef();
 
   useEffect(()=>{
     if(spinning){
       setAnimTrigger(false);
       let p=0;
+      const speed=40;
       const loop=()=>{
-        p=(p+speedRef.current)% (gifts.length*ITEM_SIZE);
-        setPos(p);
+        p=(p+speed)%(gifts.length*ITEM_SIZE);
+        posRef.current=p;
         stripRef.current.style.transform=`translateY(-${p}px)`;
         reqRef.current=requestAnimationFrame(loop);
       };
@@ -153,12 +153,19 @@ function Reel({ spinning, finalGift, staticSvgs, stopDelay, onStop }){
 
       const stopTimer=setTimeout(()=>{
         cancelAnimationFrame(reqRef.current);
-        const offset=finalGift*ITEM_SIZE;
-        stripRef.current.style.transition=`transform 0.5s ease-out`;
+        const currentIndex=Math.round(posRef.current/ITEM_SIZE);
+        const loops=3; // ещё 3 круга вперёд
+        const targetIndex=currentIndex+loops*gifts.length+finalGift;
+        const offset=targetIndex*ITEM_SIZE;
+        stripRef.current.style.transition=`transform 0.6s ease-out`;
         stripRef.current.style.transform=`translateY(-${offset}px)`;
         stripRef.current.addEventListener("transitionend",()=>{
           setAnimTrigger(true);
           stripRef.current.style.transition="";
+          // сброс позиции для цикличности
+          const reset=finalGift*ITEM_SIZE;
+          stripRef.current.style.transform=`translateY(-${reset}px)`;
+          posRef.current=reset;
           onStop();
         },{once:true});
       },stopDelay);
@@ -167,9 +174,9 @@ function Reel({ spinning, finalGift, staticSvgs, stopDelay, onStop }){
     }
   },[spinning,finalGift]);
 
-  // рендерим много копий подарков (визуальная бесконечность)
-  const repeated = [];
-  for(let r=0;r<10;r++){
+  // рендерим много копий подарков
+  const repeated=[];
+  for(let r=0;r<20;r++){
     for(let i=0;i<gifts.length;i++){
       repeated.push(
         React.createElement(SlotItem,{
