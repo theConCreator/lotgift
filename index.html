@@ -1,167 +1,222 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <title>Slot Machine Fixed</title>
-  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      background: #111;
-      color: white;
-      font-family: sans-serif;
-    }
-    .machine {
-      display: flex;
-      gap: 10px;
-      padding: 20px;
-      border: 4px solid #444;
-      border-radius: 16px;
-      background: #222;
-    }
-    .reel {
-      width: 120px;
-      height: 120px;
-      overflow: hidden;
-      border: 2px solid #555;
-      background: black;
-    }
-    .strip {
-      display: flex;
-      flex-direction: column;
-      will-change: transform;
-    }
-    .item {
-      width: 120px;
-      height: 120px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-      background: #000;
-      color: white;
-    }
-    button {
-      margin-top: 20px;
-      padding: 10px 20px;
-      font-size: 18px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      background: #28a745;
-      color: white;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Slot Machine Telegram Gifts</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/lottie-web/build/player/lottie_light.min.js"></script>
+<style>
+  html, body {
+    margin:0; padding:0; overflow:hidden; height:100%; background:#111; color:white; font-family:sans-serif;
+  }
+  .app { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; }
+  .machine-wrap { position:relative; width:440px; height:440px; display:flex; justify-content:center; align-items:center; }
+  .reels { position:absolute; display:flex; gap:14px; z-index:0; }
+  .slot-window { width:110px; height:110px; overflow:hidden; border-radius:12px; background:#000; display:flex; align-items:center; justify-content:center; position:relative; }
+  .slot-strip { will-change: transform; }
+  .slot-item { width:110px; height:110px; display:flex; align-items:center; justify-content:center; position:relative; }
+  .machine-lottie { position:absolute; inset:0; z-index:60; pointer-events:none; }
+  .spin-btn { margin-top:20px; padding:10px 28px; border-radius:12px; border:0; background:linear-gradient(90deg,#7c3aed,#ec4899); color:white; font-weight:700; font-size:18px; cursor:pointer; }
+  .spin-btn[disabled] { opacity:0.45; cursor:not-allowed; }
+</style>
 </head>
 <body>
-  <div id="root"></div>
+<div id="root"></div>
+<script type="text/babel">
+const {useState, useEffect, useRef} = React;
 
-  <script type="text/babel">
-    const gifts = [
-      {name:"Desk Calendar"}, 
-      {name:"B-Day Candle"}, 
-      {name:"Lol Pop"}
-    ];
+// Подарки
+const gifts = [
+  {name:"Desk Calendar", file:"./assets/gifts/Desk Calendar.json"},
+  {name:"B-Day Candle", file:"./assets/gifts/B-Day Candle.json"},
+  {name:"Lol Pop", file:"./assets/gifts/Lol Pop.json"}
+];
 
-    const ITEM_SIZE = 120;
-    const REPEAT_COUNT = 50; // лента в 50 циклов
+const ITEM_SIZE = 110;
+const REEL_COUNT = 3;
+const BUFFER = 5;
+const SPEED_PX_PER_MS = 1.4; // скорость
+const STOP_TIMES = [1000,1500,2000];
 
-    function Reel({ finalIndex, stopDelay, spinning }) {
-      const stripRef = React.useRef(null);
-      const posRef = React.useRef(0);
-      const rafRef = React.useRef(null);
-      const runningRef = React.useRef(false);
-      const items = [];
-
-      for (let i = 0; i < REPEAT_COUNT; i++) {
-        for (let g of gifts) {
-          items.push(<div className="item" key={i+"-"+g.name}>{g.name}</div>);
-        }
+async function preloadFreeze(file){
+  return new Promise(resolve=>{
+    const tmp=document.createElement('div');
+    tmp.style.cssText=`position:fixed;left:-9999px;top:-9999px;width:${ITEM_SIZE}px;height:${ITEM_SIZE}px;`;
+    document.body.appendChild(tmp);
+    const anim = lottie.loadAnimation({container:tmp,renderer:'svg',loop:false,autoplay:false,path:file});
+    let ticks=0;
+    const check=setInterval(()=>{
+      const svg=tmp.querySelector('svg');
+      ticks++;
+      if(svg || ticks>120){
+        clearInterval(check);
+        try{anim.goToAndStop(0,true);}catch(e){}
+        setTimeout(()=>{
+          const html=tmp.innerHTML;
+          try{anim.destroy();}catch(e){}
+          document.body.removeChild(tmp);
+          resolve(html);
+        },35);
       }
-      const totalHeight = gifts.length * ITEM_SIZE * REPEAT_COUNT;
+    },16);
+  });
+}
 
-      React.useEffect(() => {
-        if (spinning) {
-          runningRef.current = true;
-          function step() {
-            if (!runningRef.current) return;
-            posRef.current += 20; // скорость
-            const mod = posRef.current % totalHeight;
-            stripRef.current.style.transform = `translateY(-${mod}px)`;
-            rafRef.current = requestAnimationFrame(step);
-          }
-          rafRef.current = requestAnimationFrame(step);
+// Слот элемент
+function SlotCell({giftIndex, staticSvgs, animate}){
+  const ref=useRef(null);
+  useEffect(()=>{
+    if(!ref.current) return;
+    if(!staticSvgs) return;
+    if(animate){
+      ref.current.innerHTML='';
+      const anim = lottie.loadAnimation({
+        container: ref.current,
+        renderer:'svg',
+        loop:false,
+        autoplay:true,
+        path:gifts[giftIndex].file
+      });
+      anim.addEventListener('complete',()=>{ref.current.innerHTML=staticSvgs[giftIndex]}, {once:true});
+      return ()=>{try{anim.destroy()}catch(e){}};
+    }else{
+      ref.current.innerHTML=staticSvgs[giftIndex] || '';
+    }
+  },[giftIndex,staticSvgs,animate]);
+  return <div className="slot-item"><div ref={ref}></div></div>;
+}
 
-          const stopTimer = setTimeout(() => {
-            runningRef.current = false;
-            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+// Reel
+function Reel({reelIndex, spinning, finalGiftIndex, staticSvgs, stopTimeMs, onReelStop}){
+  const stripRef = useRef(null);
+  const posRef = useRef(0);
+  const runningRef = useRef(false);
+  const rafRef = useRef(null);
+  const lastTsRef = useRef(null);
+  const [startIndex,setStartIndex]=useState(0);
+  const [animateRel,setAnimateRel]=useState(null);
+  const [visibleIndices,setVisibleIndices]=useState(Array.from({length:BUFFER*2+1},(_,i)=>i));
 
-            const currentIndex = Math.floor(posRef.current / ITEM_SIZE);
-            const loops = 3;
-            const targetIndex = currentIndex + loops * gifts.length + finalIndex;
-            const offset = targetIndex * ITEM_SIZE;
+  const makeVisibleIndices=(s)=>Array.from({length:BUFFER*2+1},(_,i)=> (s+i)%gifts.length );
 
-            stripRef.current.style.transition = "transform 0.8s ease-out";
-            stripRef.current.style.transform = `translateY(-${offset}px)`;
-
-            stripRef.current.addEventListener("transitionend", () => {
-              stripRef.current.style.transition = "";
-              const reset = finalIndex * ITEM_SIZE;
-              stripRef.current.style.transform = `translateY(-${reset}px)`;
-              posRef.current = reset;
-            }, {once:true});
-          }, stopDelay);
-
-          return () => clearTimeout(stopTimer);
+  useEffect(()=>{
+    const speed=SPEED_PX_PER_MS;
+    function step(ts){
+      if(!runningRef.current) { lastTsRef.current=null; return; }
+      if(lastTsRef.current==null) lastTsRef.current=ts;
+      const dt=ts-lastTsRef.current;
+      lastTsRef.current=ts;
+      posRef.current+=speed*dt;
+      const curIndex=Math.floor(posRef.current/ITEM_SIZE);
+      const desiredStart=Math.max(0,curIndex-BUFFER);
+      if(desiredStart!==startIndex){
+        setStartIndex(desiredStart);
+        setVisibleIndices(makeVisibleIndices(desiredStart));
+      }
+      const relOffset=posRef.current-desiredStart*ITEM_SIZE;
+      if(stripRef.current) stripRef.current.style.transform=`translateY(-${relOffset}px)`;
+      rafRef.current=requestAnimationFrame(step);
+    }
+    if(spinning){
+      runningRef.current=true;
+      rafRef.current=requestAnimationFrame(step);
+      const stopTimer=setTimeout(()=>{
+        runningRef.current=false;
+        if(rafRef.current) cancelAnimationFrame(rafRef.current);
+        const currentIndex=Math.floor(posRef.current/ITEM_SIZE);
+        const loops=3;
+        const targetIndex=currentIndex+loops*gifts.length+finalGiftIndex;
+        const offset=targetIndex*ITEM_SIZE;
+        if(stripRef.current){
+          stripRef.current.style.transition='transform 0.8s ease-out';
+          stripRef.current.style.transform=`translateY(-${offset}px)`;
+          stripRef.current.addEventListener('transitionend',()=>{
+            stripRef.current.style.transition='';
+            const reset=finalGiftIndex*ITEM_SIZE;
+            stripRef.current.style.transform=`translateY(-${reset}px)`;
+            posRef.current=reset;
+            setStartIndex(0);
+            setVisibleIndices(makeVisibleIndices(0));
+            setAnimateRel(0);
+            onReelStop && onReelStop(reelIndex);
+          },{once:true});
         }
-      }, [spinning]);
-
-      return (
-        <div className="reel">
-          <div className="strip" ref={stripRef}>
-            {items}
-          </div>
-        </div>
-      );
+      },stopTimeMs);
+      return ()=>clearTimeout(stopTimer);
     }
+  },[spinning]);
 
-    function App() {
-      const [spinning, setSpinning] = React.useState(false);
-      const [results, setResults] = React.useState([0,0,0]);
+  const nodes=visibleIndices.map((idx,i)=> <SlotCell key={i} giftIndex={idx} staticSvgs={staticSvgs} animate={animateRel===i}/>);
 
-      const spin = () => {
-        if (spinning) return;
-        const newResults = [
-          Math.floor(Math.random() * gifts.length),
-          Math.floor(Math.random() * gifts.length),
-          Math.floor(Math.random() * gifts.length),
-        ];
-        setResults(newResults);
-        setSpinning(true);
-        setTimeout(() => setSpinning(false), 3000);
-      };
+  return <div className="slot-window"><div className="slot-strip" ref={stripRef}>{nodes}</div></div>;
+}
 
-      return (
-        <div>
-          <div className="machine">
-            <Reel finalIndex={results[0]} stopDelay={1000} spinning={spinning}/>
-            <Reel finalIndex={results[1]} stopDelay={1500} spinning={spinning}/>
-            <Reel finalIndex={results[2]} stopDelay={2000} spinning={spinning}/>
-          </div>
-          <button onClick={spin}>SPIN</button>
-        </div>
-      );
+// App
+function App(){
+  const [staticSvgs,setStaticSvgs]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [spinning,setSpinning]=useState(false);
+  const [finals,setFinals]=useState([0,0,0]);
+  const machineRef=useRef(null);
+  const machineAnim=useRef(null);
+  const stoppedCount=useRef(0);
+
+  useEffect(()=>{
+    let cancelled=false;
+    (async()=>{
+      const map={};
+      for(let i=0;i<gifts.length;i++){
+        map[i]=await preloadFreeze(gifts[i].file);
+        if(cancelled) return;
+      }
+      if(!cancelled){
+        setStaticSvgs(map);
+        setLoading(false);
+      }
+    })();
+    return ()=>cancelled=true;
+  },[]);
+
+  useEffect(()=>{
+    if(!machineRef.current) return;
+    machineAnim.current=lottie.loadAnimation({container:machineRef.current, renderer:'svg', loop:false, autoplay:false, path:'./assets/777.json'});
+    return ()=>{try{machineAnim.current.destroy()}catch(e){}};
+  },[]);
+
+  function handleReelStop(i){
+    stoppedCount.current+=1;
+    if(stoppedCount.current>=REEL_COUNT){
+      setSpinning(false);
+      stoppedCount.current=0;
+      const a=finals[0],b=finals[1],c=finals[2];
+      if(a===b && b===c) setTimeout(()=>alert(`🎉 Вы выиграли: ${gifts[a].name}`),100);
     }
+  }
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
-  </script>
+  function spin(){
+    if(loading||spinning) return;
+    const res=[Math.floor(Math.random()*gifts.length),Math.floor(Math.random()*gifts.length),Math.floor(Math.random()*gifts.length)];
+    setFinals(res);
+    stoppedCount.current=0;
+    setSpinning(true);
+    if(machineAnim.current){ machineAnim.current.goToAndStop(0,true); machineAnim.current.play(); }
+  }
+
+  return <div className="app">
+    <div className="machine-wrap">
+      <div className="reels">
+        {finals.map((f,i)=><Reel key={i} reelIndex={i} spinning={spinning} finalGiftIndex={f} staticSvgs={staticSvgs} stopTimeMs={STOP_TIMES[i]} onReelStop={handleReelStop}/>)}
+      </div>
+      <div className="machine-lottie" ref={machineRef}></div>
+    </div>
+    <button className="spin-btn" onClick={spin} disabled={loading||spinning}>{spinning?'Крутим...':'Spin 🎰'}</button>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
 </body>
 </html>
