@@ -48,6 +48,7 @@
       border-radius: 12px;
       background: #fff;
       display: flex; align-items: center; justify-content: center;
+      position: relative;
     }
     .slot-strip { will-change: transform; }
     .slot-item {
@@ -84,18 +85,16 @@
     { name: "Lol Pop", file: "./assets/gifts/Lol Pop.json" }
   ];
 
-  // Загружаем freeze-кадр (SVG первого кадра)
-  function preloadFreeze(file) {
+  // Freeze-кадры
+  async function preloadFreeze(file) {
     return new Promise(resolve => {
       const tmp = document.createElement("div");
       tmp.style.cssText = "position:fixed;left:-9999px;width:110px;height:110px";
       document.body.appendChild(tmp);
-
       const anim = lottie.loadAnimation({
         container: tmp, renderer: "svg",
         loop: false, autoplay: false, path: file
       });
-
       const check = setInterval(() => {
         const svg = tmp.querySelector("svg");
         if (svg) {
@@ -111,64 +110,49 @@
 
   function Reel({ reelIndex, spinning, finalGift, staticSvgs, stopDelay, onStop }) {
     const stripRef = useRef(null);
-    const posRef = useRef(0);
-    const activeRef = useRef(false);
-    const rafRef = useRef(null);
+    const [pos,setPos] = useState(0);
 
-    const [items, setItems] = useState([]);
+    // Создаём бесконечную ленту (минимум 30 элементов)
+    const stripItems = Array.from({length:30},(_,i)=>i%gifts.length);
 
-    useEffect(() => {
-      setItems([...Array(12)].map(()=>Math.floor(Math.random()*gifts.length)));
-    }, []);
-
-    useEffect(() => {
-      let mounted = true;
-      function step(ts) {
-        if (!mounted) return;
-        if (activeRef.current) {
-          posRef.current += 10; // скорость (больше = быстрее)
-          stripRef.current.style.transform = `translateY(-${posRef.current}px)`;
-          if (posRef.current > items.length*ITEM_SIZE) posRef.current=0;
-        }
-        rafRef.current = requestAnimationFrame(step);
-      }
-      rafRef.current = requestAnimationFrame(step);
-      return ()=>{ mounted=false; cancelAnimationFrame(rafRef.current); };
-    }, [items]);
-
-    useEffect(() => {
-      if (spinning) {
-        activeRef.current = true;
-        setTimeout(() => {
-          activeRef.current = false;
-          const idx = items.length-1;
+    useEffect(()=>{
+      if(spinning){
+        const interval = setInterval(()=>{
+          setPos(p => (p+20)%(stripItems.length*ITEM_SIZE));
+        }, 30); // скорость
+        const stopTimer = setTimeout(()=>{
+          clearInterval(interval);
+          const idx = finalGift;
+          const offset = idx*ITEM_SIZE;
           stripRef.current.style.transition = `transform ${TRANSITION_MS}ms ease-out`;
-          stripRef.current.style.transform = `translateY(-${idx*ITEM_SIZE}px)`;
+          stripRef.current.style.transform = `translateY(-${offset}px)`;
           stripRef.current.addEventListener("transitionend", ()=>{
-            // запускаем Lottie поверх freeze
-            const last = stripRef.current.children[idx];
-            if (last) {
-              const overlay = document.createElement("div");
-              overlay.style.position="absolute";
-              overlay.style.width="110px"; overlay.style.height="110px";
-              last.appendChild(overlay);
-              const anim = lottie.loadAnimation({
-                container: overlay, renderer:"svg",
-                loop:false, autoplay:true, path:gifts[finalGift].file
-              });
-              anim.addEventListener("complete",()=>{
-                anim.destroy(); overlay.remove();
-              });
-            }
+            // Lottie поверх freeze
+            const overlay = document.createElement("div");
+            overlay.style.position="absolute";
+            overlay.style.width="110px"; overlay.style.height="110px";
+            overlay.style.top="0"; overlay.style.left="0";
+            stripRef.current.parentNode.appendChild(overlay);
+            const anim = lottie.loadAnimation({
+              container: overlay, renderer:"svg",
+              loop:false, autoplay:true, path:gifts[finalGift].file
+            });
+            anim.addEventListener("complete",()=>{
+              anim.destroy(); overlay.remove();
+            });
             onStop();
           }, {once:true});
         }, stopDelay);
+        return ()=>{clearInterval(interval);clearTimeout(stopTimer);}
       }
-    }, [spinning]);
+    },[spinning]);
 
     return React.createElement("div",{className:"slot-window"},
-      React.createElement("div",{ref:stripRef,className:"slot-strip"},
-        items.map((idx,i)=>
+      React.createElement("div",{
+        ref:stripRef,className:"slot-strip",
+        style:{transform:`translateY(-${pos}px)`}
+      },
+        stripItems.map((idx,i)=>
           React.createElement("div",{key:i,className:"slot-item",
             dangerouslySetInnerHTML:{__html:staticSvgs[idx]||""}})
         )
@@ -230,7 +214,7 @@
           [0,1,2].map(i=>
             React.createElement(Reel,{
               key:i,reelIndex:i,spinning,finalGift:finals[i],
-              staticSvgs,stopDelay:REEL_STOP_TIMES[i]-TRANSITION_MS,onStop
+              staticSvgs,stopDelay:REEL_STOP_TIMES[i],onStop
             })
           )
         ),
