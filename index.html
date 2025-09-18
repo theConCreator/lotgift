@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Slot Machine — Telegram gifts</title>
+  <title>Slot Machine — Telegram Gifts</title>
 
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -18,7 +18,6 @@
       margin: 0; padding: 0;
       height: 100%; overflow: hidden;
       background: radial-gradient(circle at center, #3b0764, #000);
-      font-family: sans-serif;
     }
     .app {
       min-height: 100vh;
@@ -28,6 +27,7 @@
       justify-content: center;
       gap: 20px;
       color: #fff;
+      font-family: sans-serif;
     }
     .machine-wrap {
       position: relative;
@@ -48,13 +48,13 @@
       border-radius: 12px;
       background: #fff;
       display: flex; align-items: center; justify-content: center;
-      position: relative;
     }
-    .slot-strip { will-change: transform; }
+    .slot-strip {
+      will-change: transform;
+    }
     .slot-item {
       width: 110px; height: 110px;
       display: flex; align-items: center; justify-content: center;
-      position: relative;
     }
     .machine-lottie {
       position: absolute; inset: 0; z-index: 60; pointer-events: none;
@@ -74,12 +74,10 @@
 <div id="root"></div>
 
 <script type="text/javascript">
-const { useState, useEffect, useRef, useMemo } = React;
+const { useState, useEffect, useRef } = React;
 
 const ITEM_SIZE = 110;
-const REEL_STOP_TIMES = [1000, 1500, 2000]; // ms
-const TRANSITION_MS = 500;
-
+const REEL_STOP_TIMES = [1000, 1500, 2000];
 const gifts = [
   { name: "Desk Calendar", file: "./assets/gifts/Desk Calendar.json" },
   { name: "B-Day Candle", file: "./assets/gifts/B-Day Candle.json" },
@@ -134,57 +132,57 @@ function SlotItem({giftIndex, staticSvgs, animate}){
   );
 }
 
-function Reel({ reelIndex, spinning, finalGift, staticSvgs, stopDelay, onStop }){
+function Reel({ spinning, finalGift, staticSvgs, stopDelay, onStop }){
   const stripRef=useRef(null);
   const [pos,setPos]=useState(0);
   const [animTrigger,setAnimTrigger]=useState(false);
-
-  // дублируем список подарков ×4
-  const stripItems=useMemo(()=>{
-    let arr=[];
-    for(let i=0;i<4;i++) arr=arr.concat([0,1,2]);
-    return arr;
-  },[]);
-
-  const totalHeight=stripItems.length*ITEM_SIZE;
+  const speedRef=useRef(35);
+  const reqRef=useRef();
 
   useEffect(()=>{
     if(spinning){
       setAnimTrigger(false);
       let p=0;
-      const interval=setInterval(()=>{
-        p=(p+25)%totalHeight;
+      const loop=()=>{
+        p=(p+speedRef.current)% (gifts.length*ITEM_SIZE);
         setPos(p);
-      },30);
+        stripRef.current.style.transform=`translateY(-${p}px)`;
+        reqRef.current=requestAnimationFrame(loop);
+      };
+      reqRef.current=requestAnimationFrame(loop);
 
       const stopTimer=setTimeout(()=>{
-        clearInterval(interval);
-        // рассчитаем позицию для остановки на finalGift
-        const idx=stripItems.lastIndexOf(finalGift);
-        const offset=idx*ITEM_SIZE;
-        stripRef.current.style.transition=`transform ${TRANSITION_MS}ms ease-out`;
+        cancelAnimationFrame(reqRef.current);
+        const offset=finalGift*ITEM_SIZE;
+        stripRef.current.style.transition=`transform 0.5s ease-out`;
         stripRef.current.style.transform=`translateY(-${offset}px)`;
         stripRef.current.addEventListener("transitionend",()=>{
           setAnimTrigger(true);
+          stripRef.current.style.transition="";
           onStop();
         },{once:true});
       },stopDelay);
 
-      return ()=>{clearInterval(interval);clearTimeout(stopTimer);}
+      return ()=>{cancelAnimationFrame(reqRef.current);clearTimeout(stopTimer);}
     }
   },[spinning,finalGift]);
 
-  return React.createElement("div",{className:"slot-window"},
-    React.createElement("div",{
-      ref:stripRef,className:"slot-strip",
-      style:{transform:`translateY(-${pos}px)`}
-    },
-      stripItems.map((idx,i)=>
+  // рендерим много копий подарков (визуальная бесконечность)
+  const repeated = [];
+  for(let r=0;r<10;r++){
+    for(let i=0;i<gifts.length;i++){
+      repeated.push(
         React.createElement(SlotItem,{
-          key:i,giftIndex:idx,staticSvgs,
-          animate:(i===stripItems.lastIndexOf(finalGift) && animTrigger)
+          key:r+"-"+i,giftIndex:i,
+          staticSvgs,animate:(i===finalGift && animTrigger && r===0)
         })
-      )
+      );
+    }
+  }
+
+  return React.createElement("div",{className:"slot-window"},
+    React.createElement("div",{ref:stripRef,className:"slot-strip"},
+      repeated
     )
   );
 }
@@ -244,7 +242,7 @@ function App(){
       React.createElement("div",{className:"reels"},
         [0,1,2].map(i=>
           React.createElement(Reel,{
-            key:i,reelIndex:i,spinning,
+            key:i,spinning,
             finalGift:finals[i],staticSvgs,
             stopDelay:REEL_STOP_TIMES[i],onStop
           })
