@@ -41,7 +41,7 @@
   <script type="text/javascript">
     const { useState, useEffect, useRef } = React;
 
-    // 🎁 Пример подарков
+    // 🎁 Подарки (пример)
     const gifts = [
       { name: "Hypno Lollipop", file: "./assets/gifts/Hypno Lollipop.json" },
       { name: "Desk Calendar", file: "./assets/gifts/Desk Calendar.json" },
@@ -70,16 +70,16 @@
     }
 
     // 🔹 Один барабан
-    function Reel({ spinning, finalGift, delay }) {
+    function Reel({ spinning, finalGift, stopAfter }) {
       const [offset, setOffset] = useState(0);
       const stripRef = useRef(null);
 
-      // Полоска — несколько циклов + финал
+      // Лента — фиксированная
       const items = [];
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 8; i++) {
         items.push(...gifts);
       }
-      if (finalGift) items.push(finalGift);
+      items.push(finalGift); // финальный всегда в конце
 
       useEffect(() => {
         if (!spinning || !finalGift) return;
@@ -87,9 +87,9 @@
         const targetOffset = -(finalIndex * 100);
 
         const t = setTimeout(() => {
-          stripRef.current.style.transition = "transform 1s cubic-bezier(0.25, 1, 0.5, 1)";
+          stripRef.current.style.transition = "transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)";
           setOffset(targetOffset);
-        }, delay);
+        }, stopAfter);
 
         return () => clearTimeout(t);
       }, [spinning, finalGift]);
@@ -120,7 +120,7 @@
       const machineRef = useRef(null);
       const machineAnim = useRef(null);
 
-      // Загружаем фон автомата (но не в loop)
+      // Загружаем фон автомата (loop:false)
       useEffect(() => {
         if (!machineRef.current) return;
         machineAnim.current = lottie.loadAnimation({
@@ -144,29 +144,29 @@
         setFinal(results);
         setSpinning(true);
 
-        // Запускаем анимацию автомата 1 раз
+        // запускаем анимацию автомата
         if (machineAnim.current) {
           machineAnim.current.goToAndStop(0, true);
           machineAnim.current.play();
         }
 
-        // По окончании последнего барабана отключаем спин
+        // конец общего спина
         setTimeout(() => {
           setSpinning(false);
-        }, 3500);
+        }, 2500);
       };
 
       return (
         React.createElement("div", { className: "flex flex-col items-center" },
           React.createElement("div", { className: "relative w-[400px] h-[400px] flex items-center justify-center" },
-            // Барабаны
+            // Барабаны (поочередно 1s, 1.5s, 2s)
             React.createElement("div", { className: "absolute flex gap-4 z-0" },
               final.map((gift, i) =>
                 React.createElement(Reel, { 
                   key: i, 
                   spinning, 
                   finalGift: gift, 
-                  delay: i === 0 ? 1000 : i === 1 ? 1500 : 3000 
+                  stopAfter: i === 0 ? 1000 : i === 1 ? 1500 : 2000
                 })
               )
             ),
