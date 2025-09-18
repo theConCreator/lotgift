@@ -61,7 +61,7 @@
         if (animate) {
           anim.play();
         } else {
-          anim.goToAndStop(0, true); // ❄️ freeze frame
+          anim.goToAndStop(0, true);
         }
         return () => anim.destroy();
       }, [gift, animate]);
@@ -72,28 +72,40 @@
     function Reel({ spinning, finalGift, stopAfter }) {
       const [offset, setOffset] = useState(0);
       const stripRef = useRef(null);
+      const spinInterval = useRef(null);
 
       // формируем длинную ленту
       const items = [];
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 30; i++) {
         items.push(...gifts);
       }
       items.push(finalGift);
 
       useEffect(() => {
-        if (!spinning || !finalGift) return;
-        const finalIndex = items.length - 1;
-        const targetOffset = -(finalIndex * 100);
+        if (spinning) {
+          // постоянная прокрутка
+          let pos = 0;
+          spinInterval.current = setInterval(() => {
+            pos = (pos - 20) % (items.length * 100);
+            stripRef.current.style.transition = "none";
+            stripRef.current.style.transform = `translateY(${pos}px)`;
+          }, 100);
 
-        stripRef.current.style.transition = "none";
-        setOffset(0);
+          // остановка в нужный момент
+          const t = setTimeout(() => {
+            clearInterval(spinInterval.current);
+            const finalIndex = items.length - 1;
+            const targetOffset = -(finalIndex * 100);
+            stripRef.current.style.transition = "transform 0.6s cubic-bezier(0.25,1,0.5,1)";
+            stripRef.current.style.transform = `translateY(${targetOffset}px)`;
+            setOffset(targetOffset);
+          }, stopAfter);
 
-        const t = setTimeout(() => {
-          stripRef.current.style.transition = "transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)";
-          setOffset(targetOffset);
-        }, stopAfter);
-
-        return () => clearTimeout(t);
+          return () => {
+            clearInterval(spinInterval.current);
+            clearTimeout(t);
+          };
+        }
       }, [spinning, finalGift]);
 
       return (
@@ -122,7 +134,6 @@
       const machineRef = useRef(null);
       const machineAnim = useRef(null);
 
-      // Загружаем анимацию автомата
       useEffect(() => {
         if (!machineRef.current) return;
         machineAnim.current = lottie.loadAnimation({
@@ -146,13 +157,12 @@
         setFinal(results);
         setSpinning(true);
 
-        // проигрываем автомат
         if (machineAnim.current) {
           machineAnim.current.goToAndStop(0, true);
           machineAnim.current.play();
         }
 
-        setTimeout(() => setSpinning(false), 2500);
+        setTimeout(() => setSpinning(false), 3000);
       };
 
       return (
@@ -169,7 +179,7 @@
                 })
               )
             ),
-            // автомат поверх
+            // автомат
             React.createElement("div", { ref: machineRef, className: "absolute inset-0 z-50" })
           ),
           React.createElement("button", {
