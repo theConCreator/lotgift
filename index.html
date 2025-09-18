@@ -1,197 +1,570 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <title>Slot Machine 🎰</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Slot Machine — Telegram gifts</title>
+
+  <!-- Tailwind (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React / ReactDOM (UMD) -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <!-- lottie -->
   <script src="https://unpkg.com/lottie-web/build/player/lottie_light.min.js"></script>
+
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      overflow: hidden;
+    :root {
+      --item-size: 110px; /* размер каждого слота (меняй если нужно) */
+      --reel-count: 3;
+    }
+    html,body {
+      height:100%;
+      margin:0;
+      padding:0;
+      overflow:hidden; /* запрет скролла */
       background: radial-gradient(circle at center, #3b0764, #000);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
     }
+
+    /* Центрирование */
+    .app {
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:28px;
+      flex-direction:column;
+      color:#fff;
+    }
+
+    /* Машина контейнер */
+    .machine-wrap {
+      position:relative;
+      width:440px;
+      height:440px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    /* Барабаны — в ряд, за автоматом */
+    .reels {
+      position:absolute;
+      display:flex;
+      gap:14px;
+      z-index:0; /* позади автомата */
+      align-items:center;
+      justify-content:center;
+    }
+
+    /* Окошко каждого барабана */
     .slot-window {
-      width: 100px;
-      height: 100px;
-      overflow: hidden;
-      border-radius: 12px;
-      background: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 0 12px rgba(255,255,255,0.3);
+      width: var(--item-size);
+      height: var(--item-size);
+      overflow:hidden;
+      border-radius:14px;
+      background: #fff;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.45);
     }
+
+    /* вертикальная лента */
     .slot-strip {
       will-change: transform;
+      display:block;
+    }
+
+    .slot-item {
+      width: var(--item-size);
+      height: var(--item-size);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background: transparent;
+    }
+
+    /* Автомат поверх барабанов */
+    .machine-lottie {
+      position:absolute;
+      inset:0;
+      z-index:60; /* поверх барабанов */
+      pointer-events:none; /* чтобы кнопки были доступны */
+    }
+
+    /* Кнопка */
+    .spin-btn {
+      appearance:none;
+      border:0;
+      cursor:pointer;
+      padding:10px 26px;
+      border-radius:12px;
+      font-weight:700;
+      font-size:18px;
+      background:linear-gradient(90deg,#7c3aed,#ec4899);
+      box-shadow: 0 10px 30px rgba(124,58,237,0.2);
+      color:white;
+    }
+    .spin-btn[disabled] { opacity:0.5; cursor:not-allowed; transform:none; }
+
+    /* Loading overlay */
+    .loading {
+      position: absolute;
+      inset:0;
+      z-index:70;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      backdrop-filter: blur(6px);
+    }
+
+    /* Result toast */
+    .toast {
+      margin-top:12px;
+      padding:10px 16px;
+      background: rgba(255,255,255,0.06);
+      border-radius:10px;
+      font-weight:600;
     }
   </style>
 </head>
-<body class="flex items-center justify-center h-screen w-screen text-white">
+<body>
   <div id="root"></div>
 
   <script type="text/javascript">
+  (function () {
     const { useState, useEffect, useRef } = React;
 
-    // 🎁 Подарки (3 тестовых)
+    /* ========== Конфигурация ========== */
+    const ITEM_SIZE = 110; // px, должен совпадать с CSS var --item-size
+    const REPEAT_CYCLES = 8; // сколько циклов подарков в ленте перед финальным элементом
+    const TRANSITION_MS = 400; // время финального торможения в ms (будет использовано в расчётах)
+    // Время, к которому должен полностью остановиться каждый барабан (в ms от старта)
+    const REEL_STOP_TIMES = [1000, 1500, 2000];
+
+    // Твои 3 подарка (json Lottie). Путь относительно index.html
     const gifts = [
       { name: "Desk Calendar", file: "./assets/gifts/Desk Calendar.json" },
       { name: "B-Day Candle", file: "./assets/gifts/B-Day Candle.json" },
       { name: "Lol Pop", file: "./assets/gifts/Lol Pop.json" }
     ];
 
-    // 🔹 Компонент подарка
-    function GiftItem({ gift, animate }) {
-      const ref = useRef(null);
-      useEffect(() => {
-        if (!gift || !ref.current) return;
-        ref.current.innerHTML = "";
+    /* ========== Утилиты для предзагрузки freeze-frame SVG ========== */
+
+    // Загружает Lottie в временный контейнер, останавливает на кадре 0 и возвращает innerHTML (SVG)
+    function preloadLottieFreeze(file) {
+      return new Promise((resolve) => {
+        const tmp = document.createElement('div');
+        tmp.style.position = 'fixed';
+        tmp.style.left = '-9999px';
+        tmp.style.width = ITEM_SIZE + 'px';
+        tmp.style.height = ITEM_SIZE + 'px';
+        document.body.appendChild(tmp);
+
         const anim = lottie.loadAnimation({
-          container: ref.current,
+          container: tmp,
           renderer: "svg",
           loop: false,
           autoplay: false,
-          path: gift.file
+          path: file
         });
-        if (animate) {
-          anim.play();
-        } else {
-          anim.goToAndStop(0, true);
-        }
-        return () => anim.destroy();
-      }, [gift, animate]);
-      return React.createElement("div", { ref, className: "w-[100px] h-[100px] flex items-center justify-center" });
+
+        // wait until a <svg> appears or timeout
+        let attempts = 0;
+        const check = setInterval(() => {
+          const svg = tmp.querySelector('svg');
+          attempts++;
+          if (svg) {
+            clearInterval(check);
+            try { anim.goToAndStop(0, true); } catch(e){ /*ignore*/ }
+            // small delay to ensure svg updated
+            setTimeout(() => {
+              const svgHTML = tmp.innerHTML;
+              anim.destroy();
+              document.body.removeChild(tmp);
+              resolve(svgHTML);
+            }, 50);
+          } else if (attempts > 80) { // fallback
+            clearInterval(check);
+            try { anim.goToAndStop(0, true); } catch(e){}
+            setTimeout(() => {
+              const svgHTML = tmp.innerHTML;
+              anim.destroy();
+              document.body.removeChild(tmp);
+              resolve(svgHTML);
+            }, 80);
+          }
+        }, 20);
+      });
     }
 
-    // 🔹 Один барабан
-    function Reel({ spinning, finalGift, stopAfter }) {
-      const [offset, setOffset] = useState(0);
-      const stripRef = useRef(null);
-      const spinInterval = useRef(null);
-
-      // формируем длинную ленту
-      const items = [];
-      for (let i = 0; i < 30; i++) {
-        items.push(...gifts);
-      }
-      items.push(finalGift);
+    /* ========== GiftItem: рендерит либо статичный SVG (freeze), либо запускает Lottie ========== */
+    function GiftItem({ giftIndex, staticSvgs, animateFlag, onCreateAnim }) {
+      const holderRef = useRef(null);
 
       useEffect(() => {
-        if (spinning) {
-          // постоянная прокрутка
-          let pos = 0;
-          spinInterval.current = setInterval(() => {
-            pos = (pos - 20) % (items.length * 100);
-            stripRef.current.style.transition = "none";
-            stripRef.current.style.transform = `translateY(${pos}px)`;
-          }, 100);
+        const el = holderRef.current;
+        if (!el) return;
+        el.innerHTML = ""; // очистка
 
-          // остановка в нужный момент
-          const t = setTimeout(() => {
-            clearInterval(spinInterval.current);
-            const finalIndex = items.length - 1;
-            const targetOffset = -(finalIndex * 100);
-            stripRef.current.style.transition = "transform 0.6s cubic-bezier(0.25,1,0.5,1)";
-            stripRef.current.style.transform = `translateY(${targetOffset}px)`;
-            setOffset(targetOffset);
-          }, stopAfter);
-
-          return () => {
-            clearInterval(spinInterval.current);
-            clearTimeout(t);
-          };
+        if (!staticSvgs[giftIndex]) {
+          // safety - если статические svg ещё не готовы, просто текст
+          el.textContent = "loading";
+          return;
         }
-      }, [spinning, finalGift]);
 
-      return (
-        React.createElement("div", { className: "slot-window" },
-          React.createElement("div", {
-            ref: stripRef,
-            className: "slot-strip",
-            style: { transform: `translateY(${offset}px)` }
-          },
-            items.map((gift, i) =>
-              React.createElement(GiftItem, {
-                key: i,
-                gift,
-                animate: (!spinning && finalGift && i === items.length - 1)
-              })
-            )
-          )
+        if (animateFlag) {
+          // создаём настоящий lottie плеер внутри этого элемента и сразу play()
+          const anim = lottie.loadAnimation({
+            container: el,
+            renderer: "svg",
+            loop: false,
+            autoplay: true,
+            path: gifts[giftIndex].file
+          });
+          if (typeof onCreateAnim === 'function') onCreateAnim(anim);
+          return () => { try { anim.destroy(); } catch(e){} };
+        } else {
+          // вставляем статическое svg (freeze frame) — клонируем строкой
+          el.innerHTML = staticSvgs[giftIndex] || "";
+          return;
+        }
+      }, [giftIndex, staticSvgs, animateFlag]);
+
+      return React.createElement('div', {
+        ref: holderRef,
+        className: 'slot-item'
+      });
+    }
+
+    /* ========== Reel: контролирует свою ленту ========== */
+    function Reel({ reelIndex, spinning, finalGiftIndex, staticSvgs, stopStartDelay, onReelStopped }) {
+      const stripRef = useRef(null);
+      const rafRef = useRef(null);
+      const lastTsRef = useRef(null);
+      const posRef = useRef(0); // текущее "смещение" в px
+      const activeRef = useRef(false); // true -> rAF обновляет позицию
+      const stoppedRef = useRef(false);
+      const animInstanceRef = useRef(null);
+
+      // Постоянная лента индексов (фиксирована между спинами)
+      const baseArrayRef = useRef(null);
+      if (!baseArrayRef.current) {
+        const base = [];
+        // генерируем REPEAT_CYCLES * gifts.length случайно перемешанные индексы,
+        // чтобы лента не была скучным повторением
+        for (let c=0; c<REPEAT_CYCLES; c++) {
+          // shuffle one cycle
+          const seq = [...Array(gifts.length).keys()];
+          for (let i = seq.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [seq[i], seq[j]] = [seq[j], seq[i]];
+          }
+          base.push(...seq);
+        }
+        baseArrayRef.current = base;
+      }
+
+      // items будет исходной лентой + финальным индекс (добавляется при старте спина)
+      const [items, setItems] = useState([...baseArrayRef.current]);
+
+      // при изменении finalGiftIndex (начало спина) — добавляем последний элемент
+      useEffect(() => {
+        if (finalGiftIndex == null) return;
+        // создаём новую ленту: копия base + final
+        setItems(prev => {
+          // always recreate from base to avoid бесконечные длинные ленты
+          return [...baseArrayRef.current, finalGiftIndex];
+        });
+        // сбрасываем позицию (без transition)
+        posRef.current = 0;
+        if (stripRef.current) {
+          stripRef.current.style.transition = 'none';
+          stripRef.current.style.transform = `translateY(0px)`;
+        }
+        stoppedRef.current = false;
+      }, [finalGiftIndex]);
+
+      // Главный rAF-спин: обновляем translateY пока activeRef==true
+      useEffect(() => {
+        let mounted = true;
+        function step(ts) {
+          if (!mounted) return;
+          if (lastTsRef.current == null) lastTsRef.current = ts;
+          const dt = ts - lastTsRef.current;
+          lastTsRef.current = ts;
+
+          if (activeRef.current && !stoppedRef.current) {
+            // скорость в px/ms — настраиваем под нужную визуальную скорость
+            const speedPxPerMs = 0.5; // 0.5 px per ms => 500 px/s
+            posRef.current = (posRef.current + speedPxPerMs * dt) % (items.length * ITEM_SIZE);
+            stripRef.current.style.transition = 'none';
+            stripRef.current.style.transform = `translateY(-${posRef.current}px)`;
+          }
+          rafRef.current = requestAnimationFrame(step);
+        }
+
+        rafRef.current = requestAnimationFrame(step);
+        return () => { mounted = false; cancelAnimationFrame(rafRef.current); lastTsRef.current = null; };
+      }, [items.length]); // пересоздаётся при изменении размера ленты
+
+      // Запуск прокрутки при spinning === true
+      useEffect(() => {
+        if (spinning) {
+          // активируем rAF-обновления
+          activeRef.current = true;
+          stoppedRef.current = false;
+          // отменяем старые анимации (если есть)
+          if (animInstanceRef.current) { try { animInstanceRef.current.destroy(); } catch(e){ } animInstanceRef.current = null; }
+
+          // запланируем начало торможения — нужно начать тормозить в момент stopStartDelay,
+          // так чтобы финальный CSS переход длиной TRANSITION_MS завершился в REEL_STOP_TIMES[reelIndex].
+          // Для простоты: stopStartDelay уже рассчитан как (stopFinish - TRANSITION_MS)
+          const tId = setTimeout(() => {
+            // прекращаем активный rAF апдейт для этой катушки
+            activeRef.current = false;
+
+            // вычисляем текущее позицию и целевую позицию последнего элемента
+            const totalHeight = items.length * ITEM_SIZE;
+            const currentPos = (posRef.current % totalHeight + totalHeight) % totalHeight;
+            const finalIndex = items.length - 1;
+            const finalPosNormalized = finalIndex * ITEM_SIZE;
+
+            // delta вперед (в направлении текущего движения)
+            let delta = (finalPosNormalized - currentPos + totalHeight) % totalHeight;
+            // если слишком маленькое смещение — добавляем один цикл чтобы эффект был заметен
+            if (delta < 40) delta += totalHeight;
+
+            // Добавим одну дополнительную оборотку для лучшего визуала
+            const targetPos = currentPos + delta + totalHeight;
+
+            // применяем transition и устанавливаем конечный transform
+            if (stripRef.current) {
+              stripRef.current.style.transition = `transform ${TRANSITION_MS}ms cubic-bezier(0.25,1,0.5,1)`;
+              stripRef.current.style.transform = `translateY(-${targetPos}px)`;
+
+              // по окончании transition — пометим как остановленную и запустим анимацию финального подарка
+              const onTransEnd = (ev) => {
+                if (ev && ev.propertyName !== 'transform') return;
+                stripRef.current.removeEventListener('transitionend', onTransEnd);
+                stoppedRef.current = true;
+                // обновим внутреннее смещение, чтобы в следующем спине корректно стартовать
+                posRef.current = targetPos % totalHeight;
+
+                // запустить Lottie-анимацию на последнем элементе:
+                // last element (в DOM) — это финальный подарок (потому что items содержит finalIndex в конце)
+                const lastChild = stripRef.current.lastElementChild;
+                if (lastChild) {
+                  lastChild.innerHTML = ''; // очистим static svg
+                  // создаём реальную Lottie анимацию и play()
+                  const anim = lottie.loadAnimation({
+                    container: lastChild,
+                    renderer: "svg",
+                    loop: false,
+                    autoplay: true,
+                    path: gifts[ finalGiftIndex ].file
+                  });
+                  anim.addEventListener('complete', () => {
+                    // оставляем финальную картинку на экране (анимация закончилась)
+                    try { anim.stop(); } catch(e) {}
+                    // можно не уничтожать — но для чистоты уничтожим
+                    try { anim.destroy(); } catch(e) {}
+                  });
+                }
+
+                if (typeof onReelStopped === 'function') onReelStopped(reelIndex);
+              };
+
+              stripRef.current.addEventListener('transitionend', onTransEnd);
+            }
+          }, stopStartDelay);
+
+          return () => clearTimeout(tId);
+        } else {
+          // если спин false (еще до нового спина) — перестрахуемся
+          activeRef.current = false;
+        }
+      }, [spinning, items, finalGiftIndex]);
+
+      // При размонтировании — почистим
+      useEffect(() => {
+        return () => {
+          activeRef.current = false;
+          if (animInstanceRef.current) {
+            try { animInstanceRef.current.destroy(); } catch(e) {}
+            animInstanceRef.current = null;
+          }
+        };
+      }, []);
+
+      // Рендерим все элементы (каждый элемент — контейнер, в который будут вставлены staticSvgs или анимация)
+      return React.createElement('div', { className: 'slot-window' },
+        React.createElement('div', {
+          ref: stripRef,
+          className: 'slot-strip',
+          style: { transform: 'translateY(0px)' }
+        },
+          items.map((idx, i) => {
+            return React.createElement('div', {
+              key: i,
+              className: 'slot-item',
+              // атрибут data-gift-index чтобы легче дебажить
+              'data-gift-index': idx
+            }, /* внутренний контейнер для SVG/animation будет заполнен через GiftItem-like подход */
+              // но чтобы не рендерить React-children для каждой, мы используем innerHTML от staticSvgs
+              // — тем не менее для простоты вставляем React компонент, который в useEffect подпишется на staticSvgs:
+              React.createElement( GiftPlaceholder, { giftIndex: idx, staticSvgs } )
+            );
+          })
         )
       );
     }
 
-    // 🎰 Автомат
-    function SlotMachine() {
+    /* ========== GiftPlaceholder: компактный компонент, который вставляет static svg (freeze) ========== */
+    function GiftPlaceholder({ giftIndex, staticSvgs }) {
+      const ref = useRef(null);
+      useEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        el.innerHTML = ""; // очистка
+        if (staticSvgs && staticSvgs[giftIndex]) {
+          el.innerHTML = staticSvgs[giftIndex];
+        } else {
+          el.textContent = '';
+        }
+      }, [giftIndex, staticSvgs]);
+      return React.createElement('div', { ref, style: { width: ITEM_SIZE + 'px', height: ITEM_SIZE + 'px' } });
+    }
+
+    /* ========== App ========== */
+    function App() {
+      const [loading, setLoading] = useState(true);
+      const [staticSvgs, setStaticSvgs] = useState({});
+      const [spinDisabled, setSpinDisabled] = useState(true);
       const [spinning, setSpinning] = useState(false);
-      const [final, setFinal] = useState([null, null, null]);
+      const [finalIndices, setFinalIndices] = useState([null, null, null]);
       const machineRef = useRef(null);
-      const machineAnim = useRef(null);
+      const machineAnimRef = useRef(null);
+
+      // Счётчик остановившихся барабанов
+      const stoppedCountRef = useRef(0);
 
       useEffect(() => {
+        let cancelled = false;
+        async function preloadAll() {
+          // предзагружаем первые кадры (freeze) для каждого gift
+          const map = {};
+          for (let i = 0; i < gifts.length; i++) {
+            try {
+              map[i] = await preloadLottieFreeze(gifts[i].file);
+            } catch (e) {
+              map[i] = `<div style="color:#000;padding:6px">error</div>`;
+            }
+            if (cancelled) return;
+          }
+          setStaticSvgs(map);
+          setLoading(false);
+          setSpinDisabled(false);
+        }
+        preloadAll();
+        return () => { cancelled = true; };
+      }, []);
+
+      // Загружаем фон автомата (играем 1 раз при каждом спине)
+      useEffect(() => {
         if (!machineRef.current) return;
-        machineAnim.current = lottie.loadAnimation({
+        machineAnimRef.current = lottie.loadAnimation({
           container: machineRef.current,
           renderer: "svg",
           loop: false,
           autoplay: false,
           path: "./assets/777.json"
         });
+        return () => {
+          try { machineAnimRef.current && machineAnimRef.current.destroy(); } catch(e) {}
+        };
       }, []);
 
-      const spin = () => {
-        if (spinning) return;
-
-        // финальные результаты
-        const results = [
-          gifts[Math.floor(Math.random() * gifts.length)],
-          gifts[Math.floor(Math.random() * gifts.length)],
-          gifts[Math.floor(Math.random() * gifts.length)]
-        ];
-        setFinal(results);
-        setSpinning(true);
-
-        if (machineAnim.current) {
-          machineAnim.current.goToAndStop(0, true);
-          machineAnim.current.play();
+      // callback от Reel о том, что он остановился
+      function onReelStopped(index) {
+        stoppedCountRef.current += 1;
+        // когда все 3 остановились — завершаем спин
+        if (stoppedCountRef.current >= 3) {
+          setSpinning(false);
+          stoppedCountRef.current = 0;
+          // проверка выигрыша
+          if (finalIndices[0] != null && finalIndices[1] != null && finalIndices[2] != null) {
+            if (finalIndices[0] === finalIndices[1] && finalIndices[1] === finalIndices[2]) {
+              // можно показать окно/уведомление — пока просто console + toast
+              setTimeout(() => {
+                alert(`🎉 Вы выиграли: ${gifts[ finalIndices[0] ].name } — свяжитесь с админом для вручения NFT.`);
+              }, 200);
+            }
+          }
         }
+      }
 
-        setTimeout(() => setSpinning(false), 3000);
-      };
+      // Нажали Spin
+      function handleSpin() {
+        if (spinDisabled || spinning || loading) return;
+        // случайные финальные индексы (0..gifts.length-1)
+        const results = [
+          Math.floor(Math.random() * gifts.length),
+          Math.floor(Math.random() * gifts.length),
+          Math.floor(Math.random() * gifts.length)
+        ];
+        setFinalIndices(results);
+        setSpinning(true);
+        // играем анимацию автомата один раз
+        try {
+          if (machineAnimRef.current) {
+            machineAnimRef.current.goToAndStop(0, true);
+            machineAnimRef.current.play();
+          }
+        } catch (e) { console.warn(e); }
+      }
 
-      return (
-        React.createElement("div", { className: "flex flex-col items-center" },
-          React.createElement("div", { className: "relative w-[400px] h-[400px] flex items-center justify-center" },
-            // барабаны
-            React.createElement("div", { className: "absolute flex gap-4 z-0" },
-              final.map((gift, i) =>
-                React.createElement(Reel, { 
-                  key: i, 
-                  spinning, 
-                  finalGift: gift, 
-                  stopAfter: i === 0 ? 1000 : i === 1 ? 1500 : 2000
-                })
-              )
-            ),
-            // автомат
-            React.createElement("div", { ref: machineRef, className: "absolute inset-0 z-50" })
+      // Вычисляем задержки, когда начинать тормозить (мы хотим, чтобы переход закончился в REEL_STOP_TIMES)
+      // startStopDelay = stopFinishTime - TRANSITION_MS
+      const stopStartDelays = REEL_STOP_TIMES.map(t => Math.max(0, t - TRANSITION_MS));
+
+      return React.createElement('div', { className: 'app' },
+        loading && React.createElement('div', { className: 'loading' }, React.createElement('div', null, 'Loading assets...')),
+        React.createElement('div', { className: 'machine-wrap' },
+          // барабаны
+          React.createElement('div', { className: 'reels' },
+            [0,1,2].map(i => React.createElement(Reel, {
+              key: i,
+              reelIndex: i,
+              spinning,
+              finalGiftIndex: finalIndices[i],
+              staticSvgs,
+              stopStartDelay: stopStartDelays[i],
+              onReelStopped
+            }))
           ),
-          React.createElement("button", {
-            onClick: spin,
-            disabled: spinning,
-            className: "mt-6 px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-lg rounded-xl shadow-lg hover:scale-105 transition disabled:opacity-50"
-          }, spinning ? "Крутим..." : "Spin 🎰")
+          // автомат поверх барабанов
+          React.createElement('div', { className: 'machine-lottie', ref: machineRef })
+        ),
+        React.createElement('div', null,
+          React.createElement('button', {
+            className: 'spin-btn',
+            onClick: handleSpin,
+            disabled: spinDisabled || spinning || loading
+          }, spinning ? 'Крутим...' : 'Spin 🎰')
+        ),
+        React.createElement('div', { className: 'toast' },
+          React.createElement('div', null, 'Тестовые подарки: Desk Calendar, B-Day Candle, Lol Pop (используются Lottie-json, freeze-frame во время прокрутки).')
         )
       );
     }
 
-    ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(SlotMachine));
+    // Монтируем приложение
+    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+
+  })();
   </script>
 </body>
 </html>
