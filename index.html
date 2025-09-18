@@ -86,7 +86,7 @@
     { name: "Lol Pop", file: "./assets/gifts/Lol Pop.json" }
   ];
 
-  // Freeze-кадры
+  // Загружаем freeze-кадр
   async function preloadFreeze(file) {
     return new Promise(resolve => {
       const tmp = document.createElement("div");
@@ -109,13 +109,10 @@
     });
   }
 
-  // Один слот (freeze + умеет проиграть свою анимацию)
   function SlotItem({ giftIndex, staticSvgs, animate }) {
     const ref = useRef(null);
-
     useEffect(() => {
       if (animate && ref.current) {
-        // очищаем freeze и проигрываем анимацию
         ref.current.innerHTML = "";
         const anim = lottie.loadAnimation({
           container: ref.current,
@@ -126,38 +123,46 @@
         });
         anim.addEventListener("complete", () => {
           anim.destroy();
-          ref.current.innerHTML = staticSvgs[giftIndex]; // вернуть freeze
+          ref.current.innerHTML = staticSvgs[giftIndex];
         });
       } else if (ref.current && staticSvgs[giftIndex]) {
         ref.current.innerHTML = staticSvgs[giftIndex];
       }
     }, [giftIndex, animate, staticSvgs]);
 
-    return React.createElement("div", { className: "slot-item" },
-      React.createElement("div", { ref })
+    return React.createElement("div",{className:"slot-item"},
+      React.createElement("div",{ref})
     );
   }
 
   function Reel({ reelIndex, spinning, finalGift, staticSvgs, stopDelay, onStop }) {
     const stripRef = useRef(null);
     const [pos,setPos] = useState(0);
-    const [animIndex,setAnimIndex] = useState(null);
+    const [animTrigger,setAnimTrigger] = useState(false);
 
-    const stripItems = Array.from({length:30},(_,i)=>i%gifts.length);
+    // Лента: повторяем случайные + в конец кладём финальный подарок
+    const stripItems = React.useMemo(()=>{
+      const base = Array.from({length:20},()=>Math.floor(Math.random()*gifts.length));
+      base.push(finalGift); // финал
+      return base;
+    },[finalGift,spinning]);
 
     useEffect(()=>{
       if(spinning){
-        setAnimIndex(null);
+        setAnimTrigger(false);
+        let p = 0;
         const interval = setInterval(()=>{
-          setPos(p => (p+20)%(stripItems.length*ITEM_SIZE));
+          p = (p+25)%(stripItems.length*ITEM_SIZE);
+          setPos(p);
         }, 30);
         const stopTimer = setTimeout(()=>{
           clearInterval(interval);
-          const offset = finalGift*ITEM_SIZE;
+          const idx = stripItems.length-1;
+          const offset = idx*ITEM_SIZE;
           stripRef.current.style.transition = `transform ${TRANSITION_MS}ms ease-out`;
           stripRef.current.style.transform = `translateY(-${offset}px)`;
           stripRef.current.addEventListener("transitionend", ()=>{
-            setAnimIndex(finalGift); // запустить анимацию именно на финальном слоте
+            setAnimTrigger(true);
             onStop();
           }, {once:true});
         }, stopDelay);
@@ -173,7 +178,7 @@
         stripItems.map((idx,i)=>
           React.createElement(SlotItem,{
             key:i,giftIndex:idx,staticSvgs,
-            animate:(animIndex===idx)
+            animate:(i===stripItems.length-1 && animTrigger)
           })
         )
       )
@@ -210,6 +215,7 @@
 
     function spin(){
       if(spinning||loading)return;
+      // выбираем фиксированные подарки (для примера: 0,1,2)
       setFinals([0,1,2].map(()=>Math.floor(Math.random()*gifts.length)));
       setSpinning(true); stopped.current=0;
       if(machineAnim.current){
