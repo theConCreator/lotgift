@@ -78,7 +78,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 const ITEM_SIZE = 110;
 const REEL_STOP_TIMES = [1000, 1500, 2000]; // ms
-const TRANSITION_MS = 400;
+const TRANSITION_MS = 500;
 
 const gifts = [
   { name: "Desk Calendar", file: "./assets/gifts/Desk Calendar.json" },
@@ -86,24 +86,23 @@ const gifts = [
   { name: "Lol Pop", file: "./assets/gifts/Lol Pop.json" }
 ];
 
-// Загружаем freeze-кадры
+// freeze-кадр из Lottie
 async function preloadFreeze(file){
   return new Promise(resolve=>{
-    const tmp = document.createElement("div");
+    const tmp=document.createElement("div");
     tmp.style.cssText="position:fixed;left:-9999px;width:110px;height:110px";
     document.body.appendChild(tmp);
     const anim=lottie.loadAnimation({
-      container: tmp, renderer: "svg",
-      loop: false, autoplay: false, path: file
+      container:tmp,renderer:"svg",
+      loop:false,autoplay:false,path:file
     });
-    const check = setInterval(()=>{
-      const svg = tmp.querySelector("svg");
+    const check=setInterval(()=>{
+      const svg=tmp.querySelector("svg");
       if(svg){
         clearInterval(check);
         try{anim.goToAndStop(0,true);}catch(e){}
-        const svgHTML = tmp.innerHTML;
-        anim.destroy();
-        document.body.removeChild(tmp);
+        const svgHTML=tmp.innerHTML;
+        anim.destroy(); document.body.removeChild(tmp);
         resolve(svgHTML);
       }
     },30);
@@ -111,17 +110,14 @@ async function preloadFreeze(file){
 }
 
 function SlotItem({giftIndex, staticSvgs, animate}){
-  const ref = useRef(null);
+  const ref=useRef(null);
   useEffect(()=>{
     if(ref.current){
       if(animate){
-        // проиграть Lottie на том же месте
         ref.current.innerHTML="";
-        const anim = lottie.loadAnimation({
-          container: ref.current,
-          renderer:"svg",
-          loop:false,
-          autoplay:true,
+        const anim=lottie.loadAnimation({
+          container:ref.current,
+          renderer:"svg",loop:false,autoplay:true,
           path:gifts[giftIndex].file
         });
         anim.addEventListener("complete",()=>{
@@ -129,39 +125,43 @@ function SlotItem({giftIndex, staticSvgs, animate}){
           ref.current.innerHTML=staticSvgs[giftIndex];
         });
       } else {
-        ref.current.innerHTML=staticSvgs[giftIndex] || "";
+        ref.current.innerHTML=staticSvgs[giftIndex]||"";
       }
     }
-  },[giftIndex, animate, staticSvgs]);
+  },[giftIndex,animate,staticSvgs]);
   return React.createElement("div",{className:"slot-item"},
     React.createElement("div",{ref})
   );
 }
 
-function Reel({reelIndex, spinning, finalGift, staticSvgs, stopDelay, onStop}){
-  const stripRef = useRef(null);
-  const [pos, setPos] = useState(0);
-  const [animTrigger,setAnimTrigger] = useState(false);
+function Reel({ reelIndex, spinning, finalGift, staticSvgs, stopDelay, onStop }){
+  const stripRef=useRef(null);
+  const [pos,setPos]=useState(0);
+  const [animTrigger,setAnimTrigger]=useState(false);
 
-  const stripItems = useMemo(()=>{
-    const arr = Array.from({length:20}, ()=>Math.floor(Math.random()*gifts.length));
-    arr.push(finalGift); // финальный подарок
+  // дублируем список подарков ×4
+  const stripItems=useMemo(()=>{
+    let arr=[];
+    for(let i=0;i<4;i++) arr=arr.concat([0,1,2]);
     return arr;
-  },[finalGift, spinning]);
+  },[]);
+
+  const totalHeight=stripItems.length*ITEM_SIZE;
 
   useEffect(()=>{
     if(spinning){
       setAnimTrigger(false);
-      let p = 0;
-      const totalHeight = stripItems.length*ITEM_SIZE;
-      const interval = setInterval(()=>{
-        p = (p+25)%totalHeight;
+      let p=0;
+      const interval=setInterval(()=>{
+        p=(p+25)%totalHeight;
         setPos(p);
       },30);
-      const stopTimer = setTimeout(()=>{
+
+      const stopTimer=setTimeout(()=>{
         clearInterval(interval);
-        const idx = stripItems.length-1;
-        const offset = idx*ITEM_SIZE;
+        // рассчитаем позицию для остановки на finalGift
+        const idx=stripItems.lastIndexOf(finalGift);
+        const offset=idx*ITEM_SIZE;
         stripRef.current.style.transition=`transform ${TRANSITION_MS}ms ease-out`;
         stripRef.current.style.transform=`translateY(-${offset}px)`;
         stripRef.current.addEventListener("transitionend",()=>{
@@ -169,20 +169,20 @@ function Reel({reelIndex, spinning, finalGift, staticSvgs, stopDelay, onStop}){
           onStop();
         },{once:true});
       },stopDelay);
-      return ()=>{clearInterval(interval); clearTimeout(stopTimer);}
+
+      return ()=>{clearInterval(interval);clearTimeout(stopTimer);}
     }
-  },[spinning]);
+  },[spinning,finalGift]);
 
   return React.createElement("div",{className:"slot-window"},
     React.createElement("div",{
-      ref:stripRef,
-      className:"slot-strip",
+      ref:stripRef,className:"slot-strip",
       style:{transform:`translateY(-${pos}px)`}
     },
       stripItems.map((idx,i)=>
         React.createElement(SlotItem,{
-          key:i, giftIndex:idx, staticSvgs,
-          animate: i===stripItems.length-1 && animTrigger
+          key:i,giftIndex:idx,staticSvgs,
+          animate:(i===stripItems.lastIndexOf(finalGift) && animTrigger)
         })
       )
     )
@@ -190,19 +190,19 @@ function Reel({reelIndex, spinning, finalGift, staticSvgs, stopDelay, onStop}){
 }
 
 function App(){
-  const [loading,setLoading] = useState(true);
-  const [staticSvgs,setStaticSvgs] = useState({});
-  const [spinning,setSpinning] = useState(false);
-  const [finals,setFinals] = useState([0,0,0]);
-  const machineRef = useRef(null);
-  const machineAnim = useRef(null);
-  const stopped = useRef(0);
+  const [loading,setLoading]=useState(true);
+  const [staticSvgs,setStaticSvgs]=useState({});
+  const [spinning,setSpinning]=useState(false);
+  const [finals,setFinals]=useState([0,1,2]);
+  const machineRef=useRef(null);
+  const machineAnim=useRef(null);
+  const stopped=useRef(0);
 
   useEffect(()=>{
     (async()=>{
-      const map = {};
+      const map={};
       for(let i=0;i<gifts.length;i++){
-        map[i] = await preloadFreeze(gifts[i].file);
+        map[i]=await preloadFreeze(gifts[i].file);
       }
       setStaticSvgs(map);
       setLoading(false);
@@ -211,19 +211,18 @@ function App(){
 
   useEffect(()=>{
     if(machineRef.current){
-      machineAnim.current = lottie.loadAnimation({
-        container: machineRef.current, renderer:"svg",
-        loop:false, autoplay:false, path:"./assets/777.json"
+      machineAnim.current=lottie.loadAnimation({
+        container:machineRef.current,renderer:"svg",
+        loop:false,autoplay:false,path:"./assets/777.json"
       });
     }
   },[]);
 
   function spin(){
-    if(spinning || loading) return;
-    // фиксированные подарки, можно менять
+    if(spinning||loading) return;
     setFinals([0,1,2].map(()=>Math.floor(Math.random()*gifts.length)));
     setSpinning(true);
-    stopped.current = 0;
+    stopped.current=0;
     if(machineAnim.current){
       machineAnim.current.goToAndStop(0,true);
       machineAnim.current.play();
@@ -234,7 +233,7 @@ function App(){
     stopped.current++;
     if(stopped.current===3){
       setSpinning(false);
-      if(finals[0]===finals[1] && finals[1]===finals[2]){
+      if(finals[0]===finals[1]&&finals[1]===finals[2]){
         alert("🎉 Вы выиграли: "+gifts[finals[0]].name);
       }
     }
@@ -245,14 +244,15 @@ function App(){
       React.createElement("div",{className:"reels"},
         [0,1,2].map(i=>
           React.createElement(Reel,{
-            key:i, reelIndex:i, spinning, finalGift:finals[i],
-            staticSvgs, stopDelay:REEL_STOP_TIMES[i], onStop
+            key:i,reelIndex:i,spinning,
+            finalGift:finals[i],staticSvgs,
+            stopDelay:REEL_STOP_TIMES[i],onStop
           })
         )
       ),
-      React.createElement("div",{className:"machine-lottie", ref:machineRef})
+      React.createElement("div",{className:"machine-lottie",ref:machineRef})
     ),
-    React.createElement("button",{className:"spin-btn", onClick:spin, disabled:spinning||loading},
+    React.createElement("button",{className:"spin-btn",onClick:spin,disabled:spinning||loading},
       spinning?"Крутим...":"Spin 🎰"
     )
   );
