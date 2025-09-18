@@ -2,14 +2,11 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <title>Telegram Slot Machine 🎰</title>
+  <title>Slot Machine 🎰</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <!-- Lottie -->
   <script src="https://unpkg.com/lottie-web/build/player/lottie_light.min.js"></script>
   <style>
     html, body {
@@ -35,38 +32,40 @@
     }
   </style>
 </head>
-<body class="text-white flex items-center justify-center h-screen w-screen">
+<body class="flex items-center justify-center h-screen w-screen text-white">
   <div id="root"></div>
 
   <script type="text/javascript">
     const { useState, useEffect, useRef } = React;
 
-    // 🎁 Подарки (пример)
+    // 🎁 Подарки (3 тестовых)
     const gifts = [
-      { name: "Hypno Lollipop", file: "./assets/gifts/Hypno Lollipop.json" },
       { name: "Desk Calendar", file: "./assets/gifts/Desk Calendar.json" },
       { name: "B-Day Candle", file: "./assets/gifts/B-Day Candle.json" },
       { name: "Lol Pop", file: "./assets/gifts/Lol Pop.json" }
     ];
 
-    // 🔹 Компонент подарка (Lottie)
-    function GiftItem({ gift, autoplay }) {
+    // 🔹 Компонент подарка
+    function GiftItem({ gift, animate }) {
       const ref = useRef(null);
       useEffect(() => {
         if (!gift || !ref.current) return;
         ref.current.innerHTML = "";
-        lottie.loadAnimation({
+        const anim = lottie.loadAnimation({
           container: ref.current,
           renderer: "svg",
           loop: false,
-          autoplay: autoplay,
-          path: gift.file,
+          autoplay: false,
+          path: gift.file
         });
-      }, [gift, autoplay]);
-      return React.createElement("div", {
-        ref,
-        className: "flex items-center justify-center w-[100px] h-[100px]"
-      });
+        if (animate) {
+          anim.play();
+        } else {
+          anim.goToAndStop(0, true); // ❄️ freeze frame
+        }
+        return () => anim.destroy();
+      }, [gift, animate]);
+      return React.createElement("div", { ref, className: "w-[100px] h-[100px] flex items-center justify-center" });
     }
 
     // 🔹 Один барабан
@@ -74,17 +73,20 @@
       const [offset, setOffset] = useState(0);
       const stripRef = useRef(null);
 
-      // Лента — фиксированная
+      // формируем длинную ленту
       const items = [];
       for (let i = 0; i < 8; i++) {
         items.push(...gifts);
       }
-      items.push(finalGift); // финальный всегда в конце
+      items.push(finalGift);
 
       useEffect(() => {
         if (!spinning || !finalGift) return;
         const finalIndex = items.length - 1;
         const targetOffset = -(finalIndex * 100);
+
+        stripRef.current.style.transition = "none";
+        setOffset(0);
 
         const t = setTimeout(() => {
           stripRef.current.style.transition = "transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)";
@@ -105,7 +107,7 @@
               React.createElement(GiftItem, {
                 key: i,
                 gift,
-                autoplay: (!spinning && finalGift && i === items.length - 1)
+                animate: (!spinning && finalGift && i === items.length - 1)
               })
             )
           )
@@ -120,7 +122,7 @@
       const machineRef = useRef(null);
       const machineAnim = useRef(null);
 
-      // Загружаем фон автомата (loop:false)
+      // Загружаем анимацию автомата
       useEffect(() => {
         if (!machineRef.current) return;
         machineAnim.current = lottie.loadAnimation({
@@ -144,22 +146,19 @@
         setFinal(results);
         setSpinning(true);
 
-        // запускаем анимацию автомата
+        // проигрываем автомат
         if (machineAnim.current) {
           machineAnim.current.goToAndStop(0, true);
           machineAnim.current.play();
         }
 
-        // конец общего спина
-        setTimeout(() => {
-          setSpinning(false);
-        }, 2500);
+        setTimeout(() => setSpinning(false), 2500);
       };
 
       return (
         React.createElement("div", { className: "flex flex-col items-center" },
           React.createElement("div", { className: "relative w-[400px] h-[400px] flex items-center justify-center" },
-            // Барабаны (поочередно 1s, 1.5s, 2s)
+            // барабаны
             React.createElement("div", { className: "absolute flex gap-4 z-0" },
               final.map((gift, i) =>
                 React.createElement(Reel, { 
@@ -170,7 +169,7 @@
                 })
               )
             ),
-            // Автомат поверх
+            // автомат поверх
             React.createElement("div", { ref: machineRef, className: "absolute inset-0 z-50" })
           ),
           React.createElement("button", {
