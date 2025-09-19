@@ -15,6 +15,7 @@
     margin:0; padding:0; height:100%;
     background: radial-gradient(circle at center,#0b0b12,#0f0730);
     font-family: Inter, sans-serif; color:#fff;
+    overflow:hidden;
   }
   .app { height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; }
   .machine-wrap { width:var(--machine-w); height:var(--machine-h); position:relative; }
@@ -85,9 +86,8 @@
     const runningRef = useRef(false);
     const lastTsRef = useRef(null);
 
-    // длинная лента: 30 циклов
-    const visibleArray=[]; const CYCLES=30;
-    for(let c=0;c<CYCLES;c++){ for(let i=0;i<GIFTS.length;i++) visibleArray.push(i); }
+    const CYCLES=30; // длинная лента
+    const visibleArray=[]; for(let c=0;c<CYCLES;c++){ for(let i=0;i<GIFTS.length;i++) visibleArray.push(i); }
     const totalHeight=visibleArray.length*ITEM_SIZE;
 
     const cellApis=useRef(visibleArray.map(()=>({})));
@@ -124,15 +124,15 @@
         timer=setTimeout(async()=>{
           runningRef.current=false;
           cancelAnimationFrame(rafRef.current);
+
+          // вычисляем ближайшую позицию так, чтобы finalGiftIndex оказался в "окне"
           const currentIndex=Math.floor(posRef.current/ITEM_SIZE);
           const L=GIFTS.length; const r=((currentIndex%L)+L)%L;
           let delta=(finalGiftIndex-r+L)%L; if(delta===0)delta=L;
-          const steps=delta+2*L;
+          const steps=delta+2*L; // ещё несколько кругов для плавности
           const target=posRef.current+steps*ITEM_SIZE;
-          await animateTo(target);
-          posRef.current=finalGiftIndex*ITEM_SIZE;
-          const rel=((posRef.current%totalHeight)+totalHeight)%totalHeight;
-          stripRef.current.style.transform=`translateY(-${rel}px)`;
+
+          await animateTo(target,700); // плавная остановка
           onStopped(reelIndex);
         },stopTimeMs);
       }
