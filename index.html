@@ -1,186 +1,162 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Slot Machine — Gifts</title>
-
-<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-<script src="https://unpkg.com/lottie-web/build/player/lottie_light.min.js"></script>
-
-<style>
-  :root { --item-size: 110px; --machine-w:520px; --machine-h:480px; }
-  html,body {
-    margin:0; padding:0; height:100%;
-    background: radial-gradient(circle at center,#0b0b12,#0f0730);
-    font-family: Inter, sans-serif; color:#fff;
-    overflow:hidden;
-  }
-  .app { height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; }
-  .machine-wrap { width:var(--machine-w); height:var(--machine-h); position:relative; }
-  .reels { position:absolute; inset:0; z-index:200; display:flex; gap:18px; justify-content:center; align-items:center; }
-  .slot-window {
-    width:var(--item-size); height:var(--item-size);
-    overflow:hidden; border-radius:14px;
-    background:#111; box-shadow:0 6px 20px rgba(0,0,0,0.6), inset 0 -6px 18px rgba(255,255,255,0.05);
-  }
-  .slot-strip { will-change:transform; }
-  .slot-cell { width:var(--item-size); height:var(--item-size); position:relative; }
-  .cell-lottie { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:3; }
-  .cell-label { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:600; color:#eee; z-index:1; }
-  .machine-overlay { position:absolute; inset:0; z-index:1000; pointer-events:none; }
-  .controls { z-index:1100; }
-  .spin-btn {
-    padding:12px 28px; border:0; border-radius:12px;
-    background:linear-gradient(90deg,#7c3aed,#ec4899); color:#fff; font-weight:700; font-size:16px; cursor:pointer;
-  }
-  .spin-btn[disabled]{opacity:0.5; cursor:not-allowed;}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Slot Machine</title>
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .machine {
+      position: relative;
+      width: 600px;
+      height: 400px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .reels {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      gap: 10px;
+      z-index: 2;
+    }
+    .slot-window {
+      width: 120px;
+      height: 120px;
+      overflow: hidden;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .reel {
+      display: flex;
+      flex-direction: column;
+      transition: transform 2s cubic-bezier(.17,.67,.83,.67);
+    }
+    .item {
+      width: 120px;
+      height: 120px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 14px;
+      color: white;
+    }
+    #machine-animation {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 100%;
+      height: 100%;
+      z-index: 3;
+      pointer-events: none;
+    }
+    #spin-btn {
+      position: absolute;
+      bottom: -60px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 20px;
+      font-size: 18px;
+      border-radius: 12px;
+      border: none;
+      background: gold;
+      cursor: pointer;
+      z-index: 4;
+    }
+  </style>
 </head>
 <body>
-<div id="root"></div>
+  <div class="machine">
+    <div class="reels">
+      <div class="slot-window"><div class="reel" id="reel1"></div></div>
+      <div class="slot-window"><div class="reel" id="reel2"></div></div>
+      <div class="slot-window"><div class="reel" id="reel3"></div></div>
+    </div>
+    <div id="machine-animation"></div>
+    <button id="spin-btn">SPIN</button>
+  </div>
 
-<script>
-(function(){
-  const { useState, useEffect, useRef } = React;
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+  <script>
+    const ITEM_SIZE = 120;
 
-  const ITEM_SIZE = 110;
-  const REEL_STOP_TIMES = [1000,1500,2000];
-  const SPEED_PX_PER_MS = 1.8;
-  const GIFTS = [
-    { name: "Desk Calendar", file: "assets/gifts/Desk Calendar.json" },
-    { name: "B-Day Candle", file: "assets/gifts/B-Day Candle.json" },
-    { name: "Lol Pop", file: "assets/gifts/Lol Pop.json" }
-  ];
+    const gifts = [
+      {name:"Desk Calendar", file:"assets/gifts/Desk Calendar.json"},
+      {name:"B-Day Candle", file:"assets/gifts/B-Day Candle.json"},
+      {name:"Lol Pop", file:"assets/gifts/Lol Pop.json"}
+    ];
 
-  async function safeLoadAnimation({ container, path, autoplay }) {
-    try {
-      const r = await fetch(path);
-      if (!r.ok) return null;
-      const anim = lottie.loadAnimation({ container, renderer:"svg", loop:false, autoplay, path });
-      return anim;
-    } catch(e) { return null; }
-  }
+    const reels = [
+      document.getElementById('reel1'),
+      document.getElementById('reel2'),
+      document.getElementById('reel3')
+    ];
 
-  function SlotCell({ gift, apiRef }) {
-    const [lottieLoaded,setLottieLoaded]=React.useState(false);
-    useEffect(()=>{
-      if(apiRef && apiRef.container){
-        (async()=>{
-          const anim = await safeLoadAnimation({ container: apiRef.container, path: gift.file, autoplay:false });
-          if(anim){ try{ anim.goToAndStop(0,true);}catch{} apiRef.anim=anim; setLottieLoaded(true); }
-        })();
+    // заполняем ленты (по 10 повторов, чтобы хватало)
+    reels.forEach(reel => {
+      for(let i=0;i<10;i++){
+        gifts.forEach(g=>{
+          const div=document.createElement('div');
+          div.className='item';
+          lottie.loadAnimation({
+            container: div,
+            renderer: 'svg',
+            loop: false,
+            autoplay: true,
+            path: g.file
+          });
+          reel.appendChild(div);
+        });
       }
-    },[]);
-    return React.createElement('div',{className:"slot-cell"},
-      React.createElement('div',{className:"cell-lottie",ref:el=>{if(apiRef)apiRef.container=el;}}),
-      !lottieLoaded && React.createElement('div',{className:"cell-label"},gift.name)
-    );
-  }
+    });
 
-  function Reel({ reelIndex, spinning, finalGiftIndex, stopTimeMs, onStopped }) {
-    const stripRef = useRef(null);
-    const posRef = useRef(0);
-    const rafRef = useRef(null);
-    const runningRef = useRef(false);
-    const lastTsRef = useRef(null);
+    // машина 777
+    lottie.loadAnimation({
+      container: document.getElementById('machine-animation'),
+      renderer: 'svg',
+      loop: true,
+      autoplay: true,
+      path: "assets/777.json"
+    });
 
-    const CYCLES=30; // длинная лента
-    const visibleArray=[]; for(let c=0;c<CYCLES;c++){ for(let i=0;i<GIFTS.length;i++) visibleArray.push(i); }
-    const totalHeight=visibleArray.length*ITEM_SIZE;
+    document.getElementById('spin-btn').addEventListener('click', ()=>{
+      spin();
+    });
 
-    const cellApis=useRef(visibleArray.map(()=>({})));
+    function spin(){
+      const results=[
+        Math.floor(Math.random()*gifts.length),
+        Math.floor(Math.random()*gifts.length),
+        Math.floor(Math.random()*gifts.length)
+      ];
 
-    async function animateTo(targetPos,duration=600){
-      return new Promise(resolve=>{
-        const start=posRef.current; const delta=targetPos-start; const t0=performance.now();
-        function frame(now){
-          const t=Math.min(1,(now-t0)/duration);
-          const eased=1-Math.pow(1-t,3);
-          posRef.current=start+delta*eased;
-          const rel=((posRef.current%totalHeight)+totalHeight)%totalHeight;
-          stripRef.current.style.transform=`translateY(-${rel}px)`;
-          if(t<1) rafRef.current=requestAnimationFrame(frame); else resolve();
-        }
-        rafRef.current=requestAnimationFrame(frame);
+      reels.forEach((reel,i)=>{
+        // выбираем случайный оффсет от конца (чтобы анимация всегда вниз)
+        const extraRounds=5;
+        const stopIndex = results[i] + gifts.length * extraRounds;
+        const targetOffset = -(stopIndex*ITEM_SIZE) + (ITEM_SIZE/2 - ITEM_SIZE/2);
+        // сбросим transition, выставим reel вверх, затем плавно к целевой позиции
+        setTimeout(()=>{
+          reel.style.transition = 'transform 2s cubic-bezier(.17,.67,.83,.67)';
+          reel.style.transform = `translateY(${targetOffset}px)`;
+        }, i*500+100); // задержки 1с,1.5с,2с
       });
     }
-
-    useEffect(()=>{
-      let timer=null;
-      function step(ts){
-        if(!runningRef.current)return;
-        if(lastTsRef.current==null) lastTsRef.current=ts;
-        const dt=ts-lastTsRef.current; lastTsRef.current=ts;
-        posRef.current+=SPEED_PX_PER_MS*dt;
-        const rel=((posRef.current%totalHeight)+totalHeight)%totalHeight;
-        stripRef.current.style.transform=`translateY(-${rel}px)`;
-        rafRef.current=requestAnimationFrame(step);
-      }
-      if(spinning){
-        runningRef.current=true;
-        rafRef.current=requestAnimationFrame(step);
-        timer=setTimeout(async()=>{
-          runningRef.current=false;
-          cancelAnimationFrame(rafRef.current);
-
-          // вычисляем ближайшую позицию так, чтобы finalGiftIndex оказался в "окне"
-          const currentIndex=Math.floor(posRef.current/ITEM_SIZE);
-          const L=GIFTS.length; const r=((currentIndex%L)+L)%L;
-          let delta=(finalGiftIndex-r+L)%L; if(delta===0)delta=L;
-          const steps=delta+2*L; // ещё несколько кругов для плавности
-          const target=posRef.current+steps*ITEM_SIZE;
-
-          await animateTo(target,700); // плавная остановка
-          onStopped(reelIndex);
-        },stopTimeMs);
-      }
-      return ()=>{runningRef.current=false;cancelAnimationFrame(rafRef.current); if(timer)clearTimeout(timer);};
-    },[spinning,finalGiftIndex]);
-
-    const cells=visibleArray.map((idx,i)=>
-      React.createElement(SlotCell,{key:i,gift:GIFTS[idx],apiRef:cellApis.current[i]})
-    );
-    return React.createElement('div',{className:"slot-window"},
-      React.createElement('div',{className:"slot-strip",ref:stripRef},cells)
-    );
-  }
-
-  function App(){
-    const [spinning,setSpinning]=useState(false);
-    const [finals,setFinals]=useState([0,0,0]);
-    const machineRef=useRef(null);
-    const machineAnimRef=useRef(null);
-    const stopped=useRef(0);
-
-    useEffect(()=>{ safeLoadAnimation({container:machineRef.current,path:"assets/777.json",autoplay:false}).then(anim=>machineAnimRef.current=anim); },[]);
-
-    function handleStopped(){ stopped.current++; if(stopped.current===3){ setSpinning(false); stopped.current=0; } }
-    function spin(){
-      if(spinning)return;
-      setFinals([0,1,2].map(()=>Math.floor(Math.random()*GIFTS.length)));
-      setSpinning(true); stopped.current=0;
-      if(machineAnimRef.current){ machineAnimRef.current.goToAndStop(0,true); machineAnimRef.current.play(); }
-    }
-
-    return React.createElement('div',{className:"app"},
-      React.createElement('div',{className:"machine-wrap"},
-        React.createElement('div',{className:"reels"},
-          React.createElement(Reel,{reelIndex:0,spinning,finalGiftIndex:finals[0],stopTimeMs:REEL_STOP_TIMES[0],onStopped:handleStopped}),
-          React.createElement(Reel,{reelIndex:1,spinning,finalGiftIndex:finals[1],stopTimeMs:REEL_STOP_TIMES[1],onStopped:handleStopped}),
-          React.createElement(Reel,{reelIndex:2,spinning,finalGiftIndex:finals[2],stopTimeMs:REEL_STOP_TIMES[2],onStopped:handleStopped})
-        ),
-        React.createElement('div',{className:"machine-overlay",ref:machineRef})
-      ),
-      React.createElement('div',{className:"controls"},
-        React.createElement('button',{className:"spin-btn",onClick:spin,disabled:spinning},spinning?"Крутим…":"Spin 🎰")
-      )
-    );
-  }
-
-  ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
-})();
-</script>
+  </script>
 </body>
 </html>
