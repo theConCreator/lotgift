@@ -1,166 +1,479 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Slot Machine</title>
-  <style>
-    body {
-      margin: 0;
-      background: #111;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      overflow: hidden;
-    }
-    .machine {
-      position: relative;
-      width: 600px;
-      height: 400px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    .reels {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      display: flex;
-      gap: 10px;
-      z-index: 2;
-    }
-    .slot-window {
-      width: 120px;
-      height: 120px;
-      overflow: hidden;
-      border-radius: 12px;
-      background: rgba(0,0,0,0.6);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    .reel {
-      display: flex;
-      flex-direction: column;
-      transition: transform 2s cubic-bezier(.17,.67,.83,.67);
-    }
-    .item {
-      width: 120px;
-      height: 120px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    #machine-animation {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 100%;
-      height: 100%;
-      z-index: 3;
-      pointer-events: none;
-    }
-    #spin-btn {
-      position: absolute;
-      bottom: -60px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 10px 20px;
-      font-size: 18px;
-      border-radius: 12px;
-      border: none;
-      background: gold;
-      cursor: pointer;
-      z-index: 4;
-    }
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Slot Machine — Telegram Gifts</title>
+
+<!-- lottie -->
+<script src="https://unpkg.com/lottie-web/build/player/lottie_light.min.js"></script>
+
+<style>
+  :root {
+    --item-size: 110px;
+    --reel-count: 3;
+    --repeats: 30; /* повторов в каждой ленте (много => никаких пустот) */
+  }
+  html,body {
+    height:100%; margin:0; padding:0;
+    background: radial-gradient(circle at center,#0b0b12,#0f0730);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    color: #fff;
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    overflow: hidden;
+  }
+
+  /* App layout */
+  .app {
+    height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    gap:12px;
+  }
+
+  .machine {
+    width: 560px;
+    height: 460px;
+    position: relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  /* reels (behind overlay) */
+  .reels {
+    position:absolute;
+    z-index: 200;
+    display:flex;
+    gap: 16px;
+    align-items:center;
+    justify-content:center;
+    pointer-events: none; /* do not block clicks on controls */
+  }
+
+  .slot-window {
+    width: var(--item-size);
+    height: var(--item-size);
+    overflow: hidden;
+    border-radius: 14px;
+    background: linear-gradient(180deg,#0b0b0f,#111);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6), inset 0 -6px 18px rgba(255,255,255,0.02);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+  }
+
+  .slot-strip { width:100%; display:block; will-change: transform; }
+
+  .slot-cell {
+    width: var(--item-size);
+    height: var(--item-size);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    background: transparent;
+  }
+
+  .cell-svg {
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:2; pointer-events:none;
+  }
+  .cell-label {
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:1;
+    font-weight:700; text-align:center; padding:6px; color:#eaeaea; font-size:13px;
+  }
+
+  /* machine overlay - topmost game visual */
+  .machine-overlay {
+    position:absolute; inset:0; z-index: 900; pointer-events:none; display:flex; align-items:center; justify-content:center;
+  }
+
+  /* controls (above everything) */
+  .controls {
+    z-index: 1000;
+    display:flex;
+    gap:12px;
+    align-items:center;
+    justify-content:center;
+    margin-top:8px;
+  }
+
+  .spin-btn {
+    padding:12px 28px; border-radius:12px; border:0;
+    background: linear-gradient(90deg,#7c3aed,#ec4899); color:white; font-weight:700; font-size:16px; cursor:pointer;
+    box-shadow: 0 10px 30px rgba(124,58,237,0.18);
+  }
+  .spin-btn[disabled] { opacity:0.5; cursor:not-allowed; }
+
+  .status { font-size:13px; color:#d3d3e6; }
+
+  /* ensure lottie svg inside cell scales to size */
+  .cell-svg > svg { width:100%; height:100%; display:block; }
+</style>
 </head>
 <body>
-  <div class="machine">
-    <div class="reels">
-      <div class="slot-window"><div class="reel" id="reel1"></div></div>
-      <div class="slot-window"><div class="reel" id="reel2"></div></div>
-      <div class="slot-window"><div class="reel" id="reel3"></div></div>
+  <div class="app">
+    <div class="machine" id="machine">
+      <div class="reels" id="reels"></div>
+      <div class="machine-overlay" id="machine-overlay"></div>
     </div>
-    <div id="machine-animation"></div>
-    <button id="spin-btn">SPIN</button>
+
+    <div class="controls">
+      <button id="spin" class="spin-btn" disabled>Загрузка...</button>
+      <div class="status" id="status">Подготовка...</div>
+    </div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
-  <script>
-    const ITEM_SIZE = 120;
+<script>
+/* ========= CONFIG ========== */
+const ITEM_SIZE = 110;
+const REEL_COUNT = 3;
+const REPEAT_COUNT = 30; // много повторов -> никогда нет пустот
+const SPIN_STOP_MS = [1000, 1500, 2000]; // поочередные остановки (ms)
+const EXTRA_CYCLES = 3; // сколько дополнительных полных кругов при остановке
+const SPIN_SPEED_PX_PER_MS = 1.8; // px per ms while spinning
+const FINAL_EASE_MS = 600; // время easing при остановке
 
-    const gifts = [
-      {name:"Desk Calendar", file:"assets/gifts/Desk Calendar.json"},
-      {name:"B-Day Candle", file:"assets/gifts/B-Day Candle.json"},
-      {name:"Lol Pop", file:"assets/gifts/Lol Pop.json"}
-    ];
+// gifts list (names must exactly match JSON filenames)
+const gifts = [
+  { name: "Desk Calendar", file: "assets/gifts/Desk Calendar.json" },
+  { name: "B-Day Candle", file: "assets/gifts/B-Day Candle.json" },
+  { name: "Lol Pop", file: "assets/gifts/Lol Pop.json" }
+];
 
-    const reels = [
-      document.getElementById('reel1'),
-      document.getElementById('reel2'),
-      document.getElementById('reel3')
-    ];
+const MACHINE_JSON = "assets/777.json";
 
-    // функция загрузки только первого кадра
-    function loadFirstFrame(container, path) {
-      const anim = lottie.loadAnimation({
-        container: container,
-        renderer: 'svg',
+/* ========= UTILITIES ========== */
+
+// safe fetch JSON presence
+async function urlExists(url) {
+  try {
+    const resp = await fetch(url, { method: "GET" });
+    return resp.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+// preload first frame: load Lottie in a hidden tmp container, goToAndStop(0) and extract svg innerHTML
+async function preloadFirstFrame(path) {
+  return new Promise(resolve => {
+    const tmp = document.createElement("div");
+    tmp.style.cssText = `position:fixed;left:-9999px;top:-9999px;width:${ITEM_SIZE}px;height:${ITEM_SIZE}px;`;
+    document.body.appendChild(tmp);
+
+    let anim;
+    try {
+      anim = lottie.loadAnimation({
+        container: tmp,
+        renderer: "svg",
         loop: false,
         autoplay: false,
-        path: path
+        path
       });
-      anim.addEventListener("DOMLoaded", () => {
-        anim.goToAndStop(0, true);
-      });
+    } catch (e) {
+      // failed to create animation
+      document.body.removeChild(tmp);
+      resolve(null);
+      return;
     }
 
-    // заполняем ленты (повторяем несколько раз для эффекта бесконечности)
-    reels.forEach(reel => {
-      for(let i=0;i<10;i++){
-        gifts.forEach(g=>{
-          const div=document.createElement('div');
-          div.className='item';
-          loadFirstFrame(div, g.file);
-          reel.appendChild(div);
-        });
+    let ticks = 0;
+    const check = setInterval(() => {
+      const svg = tmp.querySelector("svg");
+      ticks++;
+      if (svg || ticks > 150) {
+        clearInterval(check);
+        try { anim.goToAndStop(0, true); } catch (e) {}
+        // slight delay to ensure svg settled
+        setTimeout(() => {
+          const html = tmp.innerHTML;
+          try { anim.destroy(); } catch (e) {}
+          document.body.removeChild(tmp);
+          resolve(html || null);
+        }, 40);
       }
+    }, 20);
+
+    // safety fallback timeout
+    setTimeout(() => {
+      if (check) { clearInterval(check); try { anim.destroy(); } catch(e){} if(document.body.contains(tmp)) document.body.removeChild(tmp); resolve(null); }
+    }, 4000);
+  });
+}
+
+// play full lottie in a container (autoplay). Returns promise resolving when complete (or immediately if fails).
+async function playLottieOnce(container, path) {
+  if (!container) return;
+  try {
+    const ok = await urlExists(path);
+    if (!ok) return;
+    const anim = lottie.loadAnimation({ container, renderer: "svg", loop: false, autoplay: true, path });
+    return new Promise(resolve => {
+      const onComplete = () => {
+        try { anim.destroy(); } catch (e) {}
+        resolve();
+      };
+      anim.addEventListener("complete", onComplete);
+      // safety timeout (in case animation doesn't fire complete)
+      setTimeout(() => { try { anim.destroy(); } catch (e) {}; resolve(); }, 7000);
     });
+  } catch (e) {
+    return;
+  }
+}
 
-    // машина 777 поверх
-    lottie.loadAnimation({
-      container: document.getElementById('machine-animation'),
-      renderer: 'svg',
-      loop: true,
-      autoplay: true,
-      path: "assets/777.json"
-    });
+/* ========= UI & REELS BUILD ========== */
 
-    document.getElementById('spin-btn').addEventListener('click', ()=>{
-      spin();
-    });
+const reelsContainer = document.getElementById("reels");
+const machineOverlay = document.getElementById("machine-overlay");
+const spinButton = document.getElementById("spin");
+const statusEl = document.getElementById("status");
 
-    function spin(){
-      const results=[
-        Math.floor(Math.random()*gifts.length),
-        Math.floor(Math.random()*gifts.length),
-        Math.floor(Math.random()*gifts.length)
-      ];
+let staticSvgs = []; // strings of SVG for each gift or null (fallback to text)
+let machineAnim = null;
 
-      reels.forEach((reel,i)=>{
-        const extraRounds=5;
-        const stopIndex = results[i] + gifts.length * extraRounds;
-        const targetOffset = -(stopIndex*ITEM_SIZE);
-        setTimeout(()=>{
-          reel.style.transition = 'transform 2s cubic-bezier(.17,.67,.83,.67)';
-          reel.style.transform = `translateY(${targetOffset}px)`;
-        }, i*500+100);
-      });
+// create per-reel structures
+const reels = []; // each reel: { container: element (strip), pos: number, running: bool, rafId, totalHeight, itemCount, cellContainers: [] }
+
+/** Initialize the UI and preload first frames */
+async function init() {
+  statusEl.textContent = "Загрузка первых кадров подарков...";
+  spinButton.disabled = true;
+
+  // preload freeze frames for each gift (one per gift)
+  staticSvgs = new Array(gifts.length).fill(null);
+  for (let i = 0; i < gifts.length; i++) {
+    try {
+      const html = await preloadFirstFrame(gifts[i].file);
+      staticSvgs[i] = html; // may be null
+    } catch (e) {
+      staticSvgs[i] = null;
     }
-  </script>
+  }
+
+  // build reels DOM
+  reelsContainer.innerHTML = ""; // clear
+  for (let r = 0; r < REEL_COUNT; r++) {
+    const windowDiv = document.createElement("div");
+    windowDiv.className = "slot-window";
+
+    const strip = document.createElement("div");
+    strip.className = "slot-strip";
+    // build repeated items
+    const cellContainers = [];
+    for (let rep = 0; rep < REPEAT_COUNT; rep++) {
+      for (let gi = 0; gi < gifts.length; gi++) {
+        const cell = document.createElement("div");
+        cell.className = "slot-cell";
+        // container for SVG (static) / lottie (play)
+        const svgContainer = document.createElement("div");
+        svgContainer.className = "cell-svg";
+        // label fallback
+        const label = document.createElement("div");
+        label.className = "cell-label";
+        label.textContent = gifts[gi].name;
+
+        // insert static svg if available, otherwise show label
+        if (staticSvgs[gi]) {
+          svgContainer.innerHTML = staticSvgs[gi];
+          label.style.display = "none";
+        } else {
+          svgContainer.innerHTML = "";
+          label.style.display = "flex";
+        }
+
+        cell.appendChild(svgContainer);
+        cell.appendChild(label);
+        strip.appendChild(cell);
+        cellContainers.push({ svgContainer, label, giftIndex: gi });
+      }
+    }
+    windowDiv.appendChild(strip);
+    reelsContainer.appendChild(windowDiv);
+
+    const totalItems = cellContainers.length;
+    const totalHeight = totalItems * ITEM_SIZE;
+
+    // initialize reel state
+    reels.push({
+      windowEl: windowDiv,
+      stripEl: strip,
+      cellContainers,
+      pos: 0,
+      running: false,
+      rafId: null,
+      totalItems,
+      totalHeight
+    });
+  }
+
+  statusEl.textContent = "Загрузка анимации автомата...";
+  // safe load machine animation (overlay)
+  try {
+    if (await urlExists(MACHINE_JSON)) {
+      try {
+        machineAnim = lottie.loadAnimation({ container: machineOverlay, renderer: "svg", loop: true, autoplay: true, path: MACHINE_JSON });
+      } catch (e) {
+        machineAnim = null;
+      }
+    } else {
+      machineAnim = null;
+    }
+  } catch (e) {
+    machineAnim = null;
+  }
+
+  statusEl.textContent = "Готово";
+  spinButton.textContent = "SPIN";
+  spinButton.disabled = false;
+}
+
+/* ========= SPIN / ANIMATION LOGIC ========== */
+
+// time-based spin loop (rAF)
+function startReelSpin(reelIndex) {
+  const reel = reels[reelIndex];
+  if (!reel) return;
+  reel.running = true;
+  let lastTs = null;
+
+  function step(ts) {
+    if (!reel.running) { lastTs = null; return; }
+    if (lastTs == null) lastTs = ts;
+    const dt = ts - lastTs; lastTs = ts;
+    reel.pos += SPIN_SPEED_PX_PER_MS * dt;
+    // keep pos bounded to avoid huge numbers
+    if (reel.pos > reel.totalHeight * 1000) reel.pos = reel.pos % reel.totalHeight;
+    const rel = ((reel.pos % reel.totalHeight) + reel.totalHeight) % reel.totalHeight;
+    reel.stripEl.style.transform = `translateY(-${rel}px)`;
+    reel.rafId = requestAnimationFrame(step);
+  }
+  reel.rafId = requestAnimationFrame(step);
+}
+
+function stopReelWithEasing(reelIndex, finalGiftIndex) {
+  return new Promise(async (resolve) => {
+    const reel = reels[reelIndex];
+    if (!reel) return resolve();
+
+    // stop the spinning loop
+    reel.running = false;
+    if (reel.rafId) { cancelAnimationFrame(reel.rafId); reel.rafId = null; }
+
+    // compute indexes
+    const currentIndex = Math.floor(reel.pos / ITEM_SIZE); // floor important
+    const L = gifts.length;
+    const r = ((currentIndex % L) + L) % L;
+    let delta = (finalGiftIndex - r + L) % L;
+    if (delta === 0) delta = L; // ensure at least some movement
+    const steps = delta + EXTRA_CYCLES * L;
+    const targetIndex = currentIndex + steps;
+    const targetPos = targetIndex * ITEM_SIZE;
+
+    // animate pos from current to targetPos with easeOutCubic via rAF
+    const start = reel.pos;
+    const duration = FINAL_EASE_MS;
+    const t0 = performance.now();
+
+    function frame(now) {
+      const t = Math.min(1, (now - t0) / duration);
+      const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      reel.pos = start + (targetPos - start) * eased;
+      const rel = ((reel.pos % reel.totalHeight) + reel.totalHeight) % reel.totalHeight;
+      reel.stripEl.style.transform = `translateY(-${rel}px)`;
+      if (t < 1) {
+        reel.rafId = requestAnimationFrame(frame);
+      } else {
+        // normalize pos to the corresponding visible cell index to keep numbers small
+        const normalizedIndex = targetIndex % reel.totalItems;
+        reel.pos = normalizedIndex * ITEM_SIZE;
+        const relFinal = ((reel.pos % reel.totalHeight) + reel.totalHeight) % reel.totalHeight;
+        reel.stripEl.style.transform = `translateY(-${relFinal}px)`;
+        // Play full Lottie animation on that visible cell (best-effort)
+        const cell = reel.cellContainers[normalizedIndex];
+        if (cell) {
+          // replace static SVG temporarily while playing
+          // store old content
+          const oldHTML = cell.svgContainer.innerHTML;
+          // play
+          (async () => {
+            await playLottieOnce(cell.svgContainer, gifts[finalGiftIndex].file);
+            // restore freeze SVG if we had one; otherwise keep label
+            if (staticSvgs[finalGiftIndex]) {
+              cell.svgContainer.innerHTML = staticSvgs[finalGiftIndex];
+              cell.label.style.display = "none";
+            } else {
+              cell.svgContainer.innerHTML = "";
+              cell.label.style.display = "flex";
+            }
+            resolve();
+          })();
+        } else {
+          resolve();
+        }
+      }
+    }
+    reel.rafId = requestAnimationFrame(frame);
+  });
+}
+
+/* ========= Spin controller ========== */
+
+let isSpinning = false;
+
+async function spinOnce() {
+  if (isSpinning) return;
+  isSpinning = true;
+  spinButton.disabled = true;
+  statusEl.textContent = "Крутим...";
+
+  // decide finals
+  const finals = Array.from({ length: REEL_COUNT }, () => Math.floor(Math.random() * gifts.length));
+
+  // start all reels
+  for (let r = 0; r < REEL_COUNT; r++) startReelSpin(r);
+
+  // schedule stops sequentially (we wait for each to complete its easing)
+  for (let r = 0; r < REEL_COUNT; r++) {
+    // wait stop delay (relative)
+    await new Promise(res => setTimeout(res, SPIN_STOP_MS[r]));
+    // stop with easing and wait until it finishes playing animation
+    await stopReelWithEasing(r, finals[r]);
+  }
+
+  // all done
+  statusEl.textContent = "Готово";
+  spinButton.disabled = false;
+  isSpinning = false;
+
+  // show win if triple
+  try {
+    if (finals.every(v => v === finals[0])) {
+      setTimeout(() => alert("🎉 Вы выиграли: " + gifts[finals[0]].name), 120);
+    }
+  } catch (e) {}
+}
+
+/* ========= Init and hookup ========= */
+
+spinButton.addEventListener("click", () => {
+  spinOnce();
+});
+
+// initialize on load
+init().then(() => {
+  spinButton.disabled = false;
+  spinButton.textContent = "SPIN";
+  statusEl.textContent = "Готово";
+}).catch((e) => {
+  console.error(e);
+  statusEl.textContent = "Ошибка инициализации";
+  spinButton.disabled = true;
+});
+</script>
 </body>
 </html>
