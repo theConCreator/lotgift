@@ -3,135 +3,54 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Slot Machine — Telegram Gifts (fixed stop)</title>
+<title>Slot Machine — Gifts Fixed</title>
 
-<!-- React + Lottie (CDN) -->
 <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 <script src="https://unpkg.com/lottie-web/build/player/lottie_light.min.js"></script>
 
 <style>
-  :root {
-    --item-size: 110px;
-  }
+  :root { --item-size: 110px; }
   html,body {
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
+    margin:0; height:100%;
     background: radial-gradient(circle at center,#0b0b12,#0f0730);
-    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    font-family: Inter, system-ui, sans-serif;
   }
-
   .app {
-    height: 100vh;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    gap:20px;
-    flex-direction:column;
+    height:100%; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:20px;
   }
-
-  .machine-wrap {
-    width: 520px;
-    height: 480px;
-    position: relative;
-    display:flex;
-    align-items:center;
-    justify-content:center;
+  .machine {
+    display:flex; gap:18px; position:relative; z-index:100;
   }
-
-  .reels {
-    position:absolute;
-    z-index: 100;
-    display:flex;
-    gap: 18px;
-    align-items:center;
-    justify-content:center;
-    pointer-events: none;
-  }
-
   .slot-window {
-    width: var(--item-size);
-    height: var(--item-size);
-    overflow: hidden;
-    border-radius: 14px;
+    width:var(--item-size); height:var(--item-size);
+    overflow:hidden; border-radius:14px;
     background: linear-gradient(180deg,#0b0b0f,#111);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.6), inset 0 -6px 18px rgba(255,255,255,0.02);
-    position: relative;
+    box-shadow:0 10px 30px rgba(0,0,0,0.6);
+    display:flex; align-items:center; justify-content:center;
   }
-
-  .slot-strip {
-    width: 100%;
-    display: block;
-    will-change: transform;
-  }
-
+  .slot-strip { will-change: transform; }
   .slot-cell {
-    width: var(--item-size);
-    height: var(--item-size);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    position: relative;
+    width:var(--item-size); height:var(--item-size);
+    display:flex; align-items:center; justify-content:center;
+    position:relative;
   }
-
   .cell-lottie {
-    position:absolute;
-    inset:0;
-    z-index: 105;
-    pointer-events:none;
-    display:flex;
-    align-items:center;
-    justify-content:center;
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
   }
-
   .cell-label {
-    z-index: 100;
-    pointer-events:none;
-    color: #e6e6e6;
-    font-weight:700;
-    text-align:center;
-    width: 90%;
-    font-size: 13px;
+    z-index:10; font-weight:700; font-size:13px; text-align:center; color:#eee;
   }
-
-  .machine-overlay {
-    position:absolute;
-    inset:0;
-    z-index: 1000;
-    pointer-events:none;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-  }
-
-  .controls {
-    z-index: 1100;
-    display:flex;
-    gap:12px;
-    align-items:center;
-    justify-content:center;
-  }
-
+  .controls { display:flex; gap:12px; }
   .spin-btn {
-    padding:12px 26px;
-    border-radius:12px;
-    border:0;
+    padding:12px 26px; border-radius:12px; border:0;
     background: linear-gradient(90deg,#7c3aed,#ec4899);
-    color: white;
-    font-weight:700;
-    font-size:16px;
+    color:#fff; font-weight:700; font-size:16px;
     cursor:pointer;
-    box-shadow: 0 8px 30px rgba(124,58,237,0.18);
   }
-  .spin-btn[disabled] { opacity:0.5; cursor:not-allowed; }
-
-  .note { color:#cfcfe2; font-size:13px; margin-top:8px; text-align:center; }
-  .cell-lottie > svg { width:100%; height:100%; display:block; }
+  .spin-btn[disabled]{ opacity:0.5; cursor:not-allowed; }
 </style>
 </head>
 <body>
@@ -139,301 +58,129 @@
 
 <script>
 (function(){
-  const { useState, useEffect, useRef } = React;
+  const {useState,useEffect,useRef} = React;
 
-  const ITEM_SIZE = 110;
-  const REEL_STOP_TIMES = [1000, 1500, 2000];
-  const SPEED_PX_PER_MS = 1.6;
-  const GIFTS = [
-    { name: "Desk Calendar", file: "assets/gifts/Desk Calendar.json" },
-    { name: "B-Day Candle", file: "assets/gifts/B-Day Candle.json" },
-    { name: "Lol Pop", file: "assets/gifts/Lol Pop.json" }
+  const ITEM_SIZE=110;
+  const GIFTS=[
+    { name:"Desk Calendar", file:"assets/gifts/Desk Calendar.json" },
+    { name:"B-Day Candle", file:"assets/gifts/B-Day Candle.json" },
+    { name:"Lol Pop", file:"assets/gifts/Lol Pop.json" }
   ];
 
-  // Safe fetch + lottie wrapper
-  async function safeFetchJson(path) {
-    try {
-      const resp = await fetch(path, { method: 'GET' });
-      if (!resp.ok) return null;
-      return await resp.json();
-    } catch (e) {
-      return null;
-    }
+  // Lottie loader (safe)
+  async function safeLoad(container,path){
+    try{
+      const res=await fetch(path); if(!res.ok) return null;
+      return lottie.loadAnimation({container,renderer:"svg",loop:false,autoplay:false,path});
+    }catch(e){ return null; }
   }
 
-  async function safeLoadAnimation(opts) {
-    // opts: { container, path, loop, autoplay, renderer }
-    try {
-      const json = await safeFetchJson(opts.path);
-      if (!json) return null;
-      // If fetch succeeded, pass path to lottie.loadAnimation (it will fetch again,
-      // but we've already confirmed availability). Use try/catch to avoid throwing.
-      try {
-        const anim = lottie.loadAnimation(Object.assign({}, opts, { renderer: opts.renderer || 'svg' }));
-        return anim;
-      } catch (e) {
-        console.warn('lottie.loadAnimation failed', e);
-        return null;
-      }
-    } catch (e) {
-      console.warn('safeLoadAnimation error', e);
-      return null;
-    }
-  }
-
-  // SlotCell: shows fallback label + a container for Lottie. parentApi used to call init/play.
-  function SlotCell({ giftIndex, label, lottiePath, parentApi }) {
-    const containerRef = useRef(null);
-    const animRef = useRef(null);
-    const initedRef = useRef(false);
-
-    useEffect(() => {
-      if (!parentApi) return;
-      parentApi.init = async () => {
-        if (initedRef.current) return;
-        initedRef.current = true;
-        if (!lottiePath || !containerRef.current) return;
-        const anim = await safeLoadAnimation({ container: containerRef.current, path: lottiePath, loop: false, autoplay: false });
-        if (!anim) { animRef.current = null; return; }
-        animRef.current = anim;
-        try { anim.goToAndStop(0, true); } catch (e) {}
+  function SlotCell({gift,api}){
+    const ref=useRef(null); const anim=useRef(null);
+    useEffect(()=>{
+      api.init=async()=>{
+        if(!ref.current) return;
+        anim.current=await safeLoad(ref.current,gift.file);
+        if(anim.current) anim.current.goToAndStop(0,true);
       };
-      parentApi.play = async () => {
-        if (animRef.current) {
-          try { animRef.current.play(); return; } catch (e) {}
-        }
-        // fallback: try to load & autoplay once
-        if (!lottiePath || !containerRef.current) return;
-        const anim = await safeLoadAnimation({ container: containerRef.current, path: lottiePath, loop: false, autoplay: true });
-        if (!anim) return;
-        anim.addEventListener('complete', () => {
-          try { anim.destroy(); } catch (e) {}
-          // re-init freeze
-          (async () => {
-            const re = await safeLoadAnimation({ container: containerRef.current, path: lottiePath, loop: false, autoplay: false });
-            if (re) { try { re.goToAndStop(0, true); } catch(e){}; animRef.current = re; }
-          })();
-        }, { once: true });
-      };
-      return () => {
-        parentApi.init = null;
-        parentApi.play = null;
-        if (animRef.current) {
-          try { animRef.current.destroy(); } catch (e) {}
-          animRef.current = null;
+      api.play=()=>{
+        if(anim.current){
+          anim.current.goToAndStop(0,true);
+          anim.current.play();
         }
       };
-    }, [parentApi, lottiePath]);
-
-    return React.createElement('div', { className: 'slot-cell', style: { width: ITEM_SIZE + 'px', height: ITEM_SIZE + 'px' } },
-      React.createElement('div', { className: 'cell-lottie', ref: containerRef }),
-      React.createElement('div', { className: 'cell-label' }, label)
+    },[]);
+    return React.createElement("div",{className:"slot-cell"},
+      React.createElement("div",{className:"cell-lottie",ref:ref}),
+      React.createElement("div",{className:"cell-label"},gift.name)
     );
   }
 
-  // Reel component — uses repeated DOM cells + posRef absolute pixels + requestAnimationFrame spin.
-  function Reel({ reelIndex, spinning, finalGiftIndex, stopTimeMs, onStopped }) {
-    const CYCLES = 8; // repeat gift list in DOM to avoid gaps
-    const visibleArray = [];
-    for (let c = 0; c < CYCLES; c++) {
-      for (let i = 0; i < GIFTS.length; i++) visibleArray.push(i);
-    }
-    const totalItems = visibleArray.length;
-    const totalHeight = totalItems * ITEM_SIZE;
+  function Reel({targetIndex,spinning,onStop,delay}){
+    const CYCLES=7; // нечётное → центр корректный
+    const arr=[]; for(let c=0;c<CYCLES;c++){for(let g of GIFTS) arr.push(g);}
+    const totalH=arr.length*ITEM_SIZE;
 
-    const stripRef = useRef(null);
-    const posRef = useRef(0); // absolute pixels (monotonic)
-    const runningRef = useRef(false);
-    const rAFRef = useRef(null);
-    const lastTsRef = useRef(null);
-    const cellApiRefs = useRef([]);
-    cellApiRefs.current = cellApiRefs.current.slice(0, visibleArray.length);
+    const strip=useRef(null);
+    const pos=useRef(0); let raf;
 
-    // Initialize freeze for visible cells after mount
-    useEffect(() => {
-      visibleArray.forEach((giftIdx, idx) => {
-        const api = cellApiRefs.current[idx];
-        if (api && api.init) {
-          try { api.init(); } catch (e) {}
-        }
-      });
-    }, []);
+    const cellApis=useRef(arr.map(()=>({})));
 
-    // Helper animateTo (rAF) with ease-out cubic — animates posRef from current to targetPos (absolute)
-    function animateTo(targetPos, durationMs = 600) {
-      return new Promise(resolve => {
-        const start = posRef.current;
-        const delta = targetPos - start;
-        const startTime = performance.now();
-        let raf;
-        function frame(now) {
-          const t = Math.min(1, (now - startTime) / durationMs);
-          // easeOutCubic
-          const eased = 1 - Math.pow(1 - t, 3);
-          posRef.current = start + delta * eased;
-          // keep posRef within reasonable bounds
-          // do not mod here — translate uses mod
-          const rel = ((posRef.current % totalHeight) + totalHeight) % totalHeight;
-          if (stripRef.current) stripRef.current.style.transform = `translateY(-${rel}px)`;
-          if (t < 1) {
-            raf = requestAnimationFrame(frame);
-          } else {
-            if (raf) cancelAnimationFrame(raf);
-            resolve();
-          }
-        }
-        raf = requestAnimationFrame(frame);
-      });
-    }
+    // init lotties once
+    useEffect(()=>{ cellApis.current.forEach(api=>api.init&&api.init()); },[]);
 
-    // Spin logic
-    useEffect(() => {
-      let stopTimer = null;
-      async function startSpin() {
-        runningRef.current = true;
-        lastTsRef.current = null;
-        function step(ts) {
-          if (!runningRef.current) { lastTsRef.current = null; return; }
-          if (lastTsRef.current == null) lastTsRef.current = ts;
-          const dt = ts - lastTsRef.current;
-          lastTsRef.current = ts;
-          posRef.current += SPEED_PX_PER_MS * dt;
-          // small normalization to avoid posRef growing too big
-          if (posRef.current > totalHeight * 1000) posRef.current = posRef.current % totalHeight;
-          const rel = ((posRef.current % totalHeight) + totalHeight) % totalHeight;
-          if (stripRef.current) stripRef.current.style.transform = `translateY(-${rel}px)`;
-          rAFRef.current = requestAnimationFrame(step);
-        }
-        rAFRef.current = requestAnimationFrame(step);
-
-        stopTimer = setTimeout(async () => {
-          // Stop spinning rAF
-          runningRef.current = false;
-          if (rAFRef.current) cancelAnimationFrame(rAFRef.current);
-
-          // Compute how many steps ahead to reach finalGiftIndex
-          const currentPos = posRef.current;
-          const currentIndex = Math.floor(currentPos / ITEM_SIZE);
-          const L = GIFTS.length;
-          const r = ((currentIndex % L) + L) % L;
-          let delta = (finalGiftIndex - r + L) % L;
-          if (delta === 0) delta = L; // ensure at least one advance to look like spin
-          const extraCycles = 2; // visual extra cycles
-          const steps = delta + extraCycles * L;
-          const targetPos = posRef.current + steps * ITEM_SIZE;
-
-          // animate via rAF to targetPos
-          await animateTo(targetPos, 600);
-
-          // Normalize posRef to canonical small position: finalGiftIndex * ITEM_SIZE
-          posRef.current = finalGiftIndex * ITEM_SIZE;
-          const relFinal = ((posRef.current % totalHeight) + totalHeight) % totalHeight;
-          if (stripRef.current) stripRef.current.style.transform = `translateY(-${relFinal}px)`;
-
-          // Find a visible DOM cell that corresponds to finalGiftIndex and trigger play
-          let played = false;
-          for (let idx = 0; idx < visibleArray.length; idx++) {
-            if (visibleArray[idx] === finalGiftIndex) {
-              const api = cellApiRefs.current[idx];
-              if (api && api.play) {
-                try { api.play(); played = true; break; } catch (e) { continue; }
-              }
-            }
-          }
-          // notify parent reel stopped
-          try { onStopped && onStopped(reelIndex); } catch (e) { console.warn(e); }
-        }, stopTimeMs);
+    useEffect(()=>{
+      if(!spinning){
+        cancelAnimationFrame(raf);
+        return;
       }
-
-      if (spinning) {
-        startSpin();
-      } else {
-        // ensure stopped
-        runningRef.current = false;
-        if (rAFRef.current) cancelAnimationFrame(rAFRef.current);
+      let start; function step(ts){
+        if(!start) start=ts;
+        const dt=ts-start;
+        pos.current+=dt*0.3; start=ts;
+        const rel=((pos.current%totalH)+totalH)%totalH;
+        strip.current.style.transform=`translateY(-${rel}px)`;
+        raf=requestAnimationFrame(step);
       }
+      raf=requestAnimationFrame(step);
 
-      return () => { if (stopTimer) clearTimeout(stopTimer); runningRef.current = false; if (rAFRef.current) cancelAnimationFrame(rAFRef.current); };
-    }, [spinning, finalGiftIndex, stopTimeMs]);
+      const timer=setTimeout(async()=>{
+        cancelAnimationFrame(raf);
+        // snap to target
+        const currentIndex=Math.round(pos.current/ITEM_SIZE)%GIFTS.length;
+        let delta=(targetIndex-currentIndex+GIFTS.length)%GIFTS.length;
+        if(delta===0) delta=GIFTS.length;
+        pos.current+=delta*ITEM_SIZE;
+        const rel=((pos.current%totalH)+totalH)%totalH;
+        strip.current.style.transform=`translateY(-${rel}px)`;
+        // trigger anim on visible cell
+        const cells=document.elementsFromPoint(
+          strip.current.getBoundingClientRect().x+ITEM_SIZE/2,
+          strip.current.parentElement.getBoundingClientRect().y+ITEM_SIZE/2
+        );
+        const idx=arr.findIndex(g=>g===GIFTS[targetIndex]);
+        if(cellApis.current[idx]) cellApis.current[idx].play();
+        onStop();
+      },delay);
 
-    // Build DOM cells
-    const cells = visibleArray.map((giftIdx, i) => {
-      if (!cellApiRefs.current[i]) cellApiRefs.current[i] = {};
-      return React.createElement(SlotCell, {
-        key: 'cell-' + i,
-        giftIndex: giftIdx,
-        label: GIFTS[giftIdx].name,
-        lottiePath: GIFTS[giftIdx].file,
-        parentApi: cellApiRefs.current[i]
-      });
-    });
+      return ()=>{clearTimeout(timer); cancelAnimationFrame(raf);};
+    },[spinning,targetIndex]);
 
-    return React.createElement('div', { className: 'slot-window' },
-      React.createElement('div', { className: 'slot-strip', ref: stripRef, style: { display: 'block' } }, cells)
+    return React.createElement("div",{className:"slot-window"},
+      React.createElement("div",{className:"slot-strip",ref:strip},
+        arr.map((g,i)=>React.createElement(SlotCell,{key:i,gift:g,api:cellApis.current[i]}))
+      )
     );
-  } // end Reel
+  }
 
-  // App
-  function App() {
-    const [spinning, setSpinning] = useState(false);
-    const [finals, setFinals] = useState([0,0,0]);
-    const machineRef = useRef(null);
-    const machineAnimRef = useRef(null);
-    const stoppedCountRef = useRef(0);
+  function App(){
+    const [spin,setSpin]=useState(false);
+    const [targets,setTargets]=useState([0,0,0]);
+    const stopped=useRef(0);
 
-    useEffect(() => {
-      (async () => {
-        const path = 'assets/777.json';
-        // check availability and load safely
-        try {
-          const resp = await fetch(path, { method: 'GET' });
-          if (!resp.ok) { console.warn('777.json not found', resp.status); return; }
-        } catch (e) { console.warn('777.json fetch failed', e); return; }
-        try {
-          machineAnimRef.current = lottie.loadAnimation({ container: machineRef.current, renderer: 'svg', loop: false, autoplay: false, path: path });
-        } catch (e) { console.warn('machine lottie load failed', e); machineAnimRef.current = null; }
-      })();
-    }, []);
-
-    function handleReelStopped(i) {
-      stoppedCountRef.current += 1;
-      if (stoppedCountRef.current >= 3) {
-        stoppedCountRef.current = 0;
-        setSpinning(false);
-        if (finals[0] === finals[1] && finals[1] === finals[2]) {
-          setTimeout(() => alert('🎉 Вы выиграли: ' + GIFTS[finals[0]].name), 150);
-        }
-      }
+    function start(){
+      if(spin) return;
+      const t=[0,1,2].map(()=>Math.floor(Math.random()*GIFTS.length));
+      setTargets(t); stopped.current=0; setSpin(true);
+    }
+    function onStop(){
+      stopped.current++;
+      if(stopped.current===3){setSpin(false);}
     }
 
-    function onSpinClick() {
-      if (spinning) return;
-      const r = [Math.floor(Math.random() * GIFTS.length), Math.floor(Math.random() * GIFTS.length), Math.floor(Math.random() * GIFTS.length)];
-      setFinals(r);
-      stoppedCountRef.current = 0;
-      setSpinning(true);
-      try {
-        if (machineAnimRef.current) { machineAnimRef.current.goToAndStop(0, true); machineAnimRef.current.play(); }
-      } catch (e) { console.warn('machine play error', e); }
-    }
-
-    return React.createElement('div', { className: 'app' },
-      React.createElement('div', { className: 'machine-wrap' },
-        React.createElement('div', { className: 'reels' },
-          React.createElement(Reel, { reelIndex: 0, spinning: spinning, finalGiftIndex: finals[0], stopTimeMs: REEL_STOP_TIMES[0], onStopped: handleReelStopped }),
-          React.createElement(Reel, { reelIndex: 1, spinning: spinning, finalGiftIndex: finals[1], stopTimeMs: REEL_STOP_TIMES[1], onStopped: handleReelStopped }),
-          React.createElement(Reel, { reelIndex: 2, spinning: spinning, finalGiftIndex: finals[2], stopTimeMs: REEL_STOP_TIMES[2], onStopped: handleReelStopped })
-        ),
-        React.createElement('div', { className: 'machine-overlay', ref: machineRef })
+    return React.createElement("div",{className:"app"},
+      React.createElement("div",{className:"machine"},
+        React.createElement(Reel,{targetIndex:targets[0],spinning:spin,onStop,delay:1000}),
+        React.createElement(Reel,{targetIndex:targets[1],spinning:spin,onStop,delay:1500}),
+        React.createElement(Reel,{targetIndex:targets[2],spinning:spin,onStop,delay:2000}),
       ),
-      React.createElement('div', { className: 'controls' },
-        React.createElement('button', { className: 'spin-btn', onClick: onSpinClick, disabled: spinning }, spinning ? 'Крутим...' : 'Spin 🎰')
-      ),
-      React.createElement('div', { className: 'note' }, 'Если Lottie недоступен — будет виден текст подарка. Папка assets/ должна быть в корне.')
+      React.createElement("div",{className:"controls"},
+        React.createElement("button",{className:"spin-btn",onClick:start,disabled:spin},spin?"...":"Spin 🎰")
+      )
     );
   }
 
-  ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+  ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
 })();
 </script>
 </body>
