@@ -52,8 +52,6 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      font-size: 14px;
-      color: white;
     }
     #machine-animation {
       position: absolute;
@@ -107,25 +105,33 @@
       document.getElementById('reel3')
     ];
 
-    // заполняем ленты (по 10 повторов, чтобы хватало)
+    // функция загрузки только первого кадра
+    function loadFirstFrame(container, path) {
+      const anim = lottie.loadAnimation({
+        container: container,
+        renderer: 'svg',
+        loop: false,
+        autoplay: false,
+        path: path
+      });
+      anim.addEventListener("DOMLoaded", () => {
+        anim.goToAndStop(0, true);
+      });
+    }
+
+    // заполняем ленты (повторяем несколько раз для эффекта бесконечности)
     reels.forEach(reel => {
       for(let i=0;i<10;i++){
         gifts.forEach(g=>{
           const div=document.createElement('div');
           div.className='item';
-          lottie.loadAnimation({
-            container: div,
-            renderer: 'svg',
-            loop: false,
-            autoplay: true,
-            path: g.file
-          });
+          loadFirstFrame(div, g.file);
           reel.appendChild(div);
         });
       }
     });
 
-    // машина 777
+    // машина 777 поверх
     lottie.loadAnimation({
       container: document.getElementById('machine-animation'),
       renderer: 'svg',
@@ -146,15 +152,13 @@
       ];
 
       reels.forEach((reel,i)=>{
-        // выбираем случайный оффсет от конца (чтобы анимация всегда вниз)
         const extraRounds=5;
         const stopIndex = results[i] + gifts.length * extraRounds;
-        const targetOffset = -(stopIndex*ITEM_SIZE) + (ITEM_SIZE/2 - ITEM_SIZE/2);
-        // сбросим transition, выставим reel вверх, затем плавно к целевой позиции
+        const targetOffset = -(stopIndex*ITEM_SIZE);
         setTimeout(()=>{
           reel.style.transition = 'transform 2s cubic-bezier(.17,.67,.83,.67)';
           reel.style.transform = `translateY(${targetOffset}px)`;
-        }, i*500+100); // задержки 1с,1.5с,2с
+        }, i*500+100);
       });
     }
   </script>
