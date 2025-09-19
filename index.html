@@ -51,9 +51,9 @@
   </div>
 
 <script>
-const ITEM_SIZE=110, REEL_COUNT=3, REPEATS=20;
+const ITEM_SIZE=110, REEL_COUNT=3, REPEATS=15;
 const STOP_DELAYS=[1000,1500,2000];
-const SPEED=2, EXTRA=1, EASE=400;
+const SPEED=2.5, EXTRA=1, EASE=400;
 
 const gifts=[
   {name:"Desk Calendar",file:"assets/gifts/Desk Calendar.json"},
@@ -95,7 +95,7 @@ async function init(){
       }
     }
     win.appendChild(strip); reelsEl.appendChild(win);
-    reels.push({strip,pos:0,running:false,raf:null,total:cells.length*ITEM_SIZE,cells});
+    reels.push({strip,pos:0,state:"stopped",raf:null,total:cells.length*ITEM_SIZE,cells});
   }
   machineAnim=lottie.loadAnimation({
     container:machineOverlay,renderer:"svg",loop:true,autoplay:true,path:"assets/777.json"});
@@ -103,9 +103,9 @@ async function init(){
 }
 
 function startSpin(r){
-  const reel=reels[r]; reel.running=true; let last=null;
+  const reel=reels[r]; reel.state="spinning"; let last=null;
   function loop(ts){
-    if(!reel.running){last=null;return;}
+    if(reel.state!=="spinning"){last=null;return;}
     if(last==null) last=ts; const dt=ts-last; last=ts;
     reel.pos=(reel.pos+SPEED*dt)%reel.total;
     reel.strip.style.transform=`translateY(-${reel.pos}px)`;
@@ -116,7 +116,8 @@ function startSpin(r){
 
 function stopSpin(r,final){
   return new Promise(res=>{
-    const reel=reels[r]; reel.running=false; if(reel.raf) cancelAnimationFrame(reel.raf);
+    const reel=reels[r]; if(reel.raf) cancelAnimationFrame(reel.raf);
+    reel.state="stopping";
     const current=Math.floor(reel.pos/ITEM_SIZE), L=gifts.length, rel=((current%L)+L)%L;
     let delta=(final-rel+L)%L; if(delta===0) delta=L;
     const targetIndex=current+delta+EXTRA*L;
@@ -124,10 +125,13 @@ function stopSpin(r,final){
     const start=reel.pos, t0=performance.now();
     function ease(now){
       const t=Math.min(1,(now-t0)/EASE), e=1-Math.pow(1-t,3);
-      reel.pos=(start+(targetPos-start)*e)%reel.total;
+      reel.pos=(start+(targetPos-start)*e+reel.total)%reel.total;
       reel.strip.style.transform=`translateY(-${reel.pos}px)`;
-      if(t<1) reel.raf=requestAnimationFrame(ease);
-      else{reel.pos=targetPos; reel.strip.style.transform=`translateY(-${reel.pos}px)`; res();}
+      if(t<1){reel.raf=requestAnimationFrame(ease);}
+      else{
+        reel.pos=targetPos; reel.strip.style.transform=`translateY(-${reel.pos}px)`;
+        reel.state="stopped"; res();
+      }
     }
     reel.raf=requestAnimationFrame(ease);
   });
