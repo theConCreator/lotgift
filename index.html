@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Slot Machine Gifts (stable)</title>
+<title>Slot Machine Gifts</title>
 <script src="https://unpkg.com/lottie-web/build/player/lottie_light.min.js"></script>
 <style>
   :root { --cell-size: 120px; }
@@ -175,23 +175,41 @@
     const results=Array.from({length:REELS},()=>Math.floor(Math.random()*gifts.length));
     const stopDelays=[1000,1500,2000]; // задержки остановки
 
-    for(let r=0;r<REELS;r++){ spinReel(r,results[r],stopDelays[r]); }
+    let finished=0;
+    const stoppedCells=[];
 
-    setTimeout(()=>{ try{overlayAnim.play()}catch{}; spinBtn.disabled=false;spinning=false; },2500);
+    for(let r=0;r<REELS;r++){
+      spinReel(r,results[r],stopDelays[r],cell=>{
+        stoppedCells[r]=cell;
+        finished++;
+        if(finished===REELS){
+          // запускаем анимации только после остановки всех
+          for(let i=0;i<REELS;i++){
+            const gi=results[i];
+            playOnce(stoppedCells[i].svg,gifts[gi].file,freezes[gi]);
+          }
+          try{overlayAnim.play()}catch{}
+          spinBtn.disabled=false;
+          spinning=false;
+        }
+      });
+    }
   };
 
-  function spinReel(idx,targetGift,stopDelay){
+  function spinReel(idx,targetGift,stopDelay,cb){
     const reel=reels[idx];
     let duration=stopDelay;
     let start=performance.now();
     let from=reel.pos;
 
-    // считаем финальный индекс
     const total=gifts.length;
     const currentIndex=Math.floor(from/CELL)%total;
     let delta=(targetGift-currentIndex+total)%total;
     if(delta===0) delta=total;
-    let targetIndex=currentIndex+delta+total*2;
+
+    // минимум 5, максимум 10 оборотов
+    const extraTurns=5+Math.floor(Math.random()*6);
+    let targetIndex=currentIndex+delta+total*extraTurns;
     let to=targetIndex*CELL;
 
     function frame(t){
@@ -204,7 +222,7 @@
         reel.pos=to;
         reel.strip.style.transform=`translateY(-${reel.pos}px)`;
         const cell=reel.cells[targetIndex%reel.cells.length];
-        playOnce(cell.svg,gifts[targetGift].file,freezes[targetGift]);
+        cb(cell);
       }
     }
     requestAnimationFrame(frame);
