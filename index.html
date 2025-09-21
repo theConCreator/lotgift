@@ -107,7 +107,7 @@
   const spinBtn=document.getElementById("spin");
   let overlayAnim=null;
 
-  // предзагрузка freeze-кадров с таймаутом
+  // предзагрузка freeze-кадров
   async function preloadFrame(path){
     return new Promise(res=>{
       const tmp=document.createElement("div");
@@ -138,11 +138,8 @@
 
   const freezes=[];
   for(let g of gifts){
-    try{
-      freezes.push(await preloadFrame(g.file));
-    }catch{
-      freezes.push(null);
-    }
+    try{ freezes.push(await preloadFrame(g.file)); }
+    catch{ freezes.push(null); }
   }
 
   // строим барабаны
@@ -187,7 +184,7 @@
     if(spinning) return;
     spinning=true; spinBtn.disabled=true;
 
-    // запускаем анимацию автомата
+    // запуск анимации автомата
     try{overlayAnim.stop();overlayAnim.play()}catch{}
 
     const results=Array.from({length:REELS},()=>Math.floor(Math.random()*gifts.length));
@@ -201,7 +198,7 @@
         stoppedCells[r]=cell;
         finished++;
         if(finished===REELS){
-          // запускаем анимации только после полной остановки
+          // запускаем анимации подарков
           for(let i=0;i<REELS;i++){
             const gi=results[i];
             playOnce(stoppedCells[i].svg,gifts[gi].file,freezes[gi]);
@@ -224,7 +221,7 @@
     let delta=(targetGift-currentIndex+total)%total;
     if(delta===0) delta=total;
 
-    const extraTurns=5+Math.floor(Math.random()*6);
+    const extraTurns=8+Math.floor(Math.random()*9); // минимум 8, максимум 16
     let targetIndex=currentIndex+delta+total*extraTurns;
     let to=targetIndex*CELL;
 
@@ -246,24 +243,27 @@
 
   function playOnce(container,path,freeze){
     if(!container) return;
-    container.innerHTML="";
-    const anim=lottie.loadAnimation({container,renderer:"svg",loop:false,autoplay:true,path});
-    let finished=false;
-    anim.addEventListener("complete",()=>{
-      if(finished) return;
-      finished=true;
-      setTimeout(()=>{
-        anim.destroy();
-        if(freeze) container.innerHTML=freeze;
-      },300);
-    });
+    // задержка 0.4с перед заменой freeze на анимацию
     setTimeout(()=>{
-      if(!finished){
+      container.innerHTML="";
+      const anim=lottie.loadAnimation({container,renderer:"svg",loop:false,autoplay:true,path});
+      let finished=false;
+      anim.addEventListener("complete",()=>{
+        if(finished) return;
         finished=true;
-        try{anim.destroy()}catch{}
-        if(freeze) container.innerHTML=freeze;
-      }
-    },6000);
+        setTimeout(()=>{
+          anim.destroy();
+          if(freeze) container.innerHTML=freeze;
+        },300);
+      });
+      setTimeout(()=>{
+        if(!finished){
+          finished=true;
+          try{anim.destroy()}catch{}
+          if(freeze) container.innerHTML=freeze;
+        }
+      },6000);
+    },400);
   }
 })();
 </script>
