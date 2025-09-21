@@ -1,410 +1,271 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Slot Machine — Telegram Gifts (stable)</title>
-
-<!-- Lottie (light) -->
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Slot Machine Gifts</title>
 <script src="https://unpkg.com/lottie-web/build/player/lottie_light.min.js"></script>
-
 <style>
-  :root{
-    --item-size:120px;
+  :root { --cell-size: 120px; }
+  body {
+    margin:0;
+    background:#0d0d19;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    height:100vh;
+    font-family:sans-serif;
+    color:#fff;
+    overflow:hidden;
   }
-  html,body{
-    height:100%; margin:0; background:radial-gradient(circle at center,#0b0b12,#0f0730);
-    font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial; color:#fff; overflow:hidden;
+  .machine {
+    position:relative;
+    width:500px;
+    height:400px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
   }
-  .app { height:100vh; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px; }
-  .machine { width:680px; height:520px; position:relative; display:flex; align-items:center; justify-content:center; }
-  .reels { position:absolute; z-index:50; display:flex; gap:22px; align-items:center; justify-content:center; pointer-events:none; }
-  .slot-window {
-    width:var(--item-size); height:var(--item-size);
-    overflow:hidden; border-radius:14px;
-    background: linear-gradient(180deg,#0b0b0f,#111);
-    box-shadow: 0 14px 40px rgba(0,0,0,0.6);
-    display:flex; align-items:center; justify-content:center;
+  .reels {
+    position:absolute;
+    display:flex;
+    gap:16px;
+    z-index:5; /* ниже автомата */
   }
-  .slot-strip { will-change:transform; }
-  .slot-cell { width:var(--item-size); height:var(--item-size); position:relative; display:flex; align-items:center; justify-content:center; }
-  .cell-svg { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:2; }
-  .cell-label { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:8px; font-weight:700; color:#eaeaea; z-index:1; }
-  .machine-overlay { position:absolute; inset:0; z-index:250; pointer-events:none; display:flex; align-items:center; justify-content:center; } /* ABOVE reels */
-  .controls { z-index:300; display:flex; gap:12px; align-items:center; justify-content:center; flex-direction:column; }
-  .spin-btn { padding:12px 30px; border-radius:12px; border:0; background:linear-gradient(90deg,#7c3aed,#ec4899); color:#fff; font-weight:800; font-size:16px; cursor:pointer; box-shadow:0 12px 30px rgba(124,58,237,0.15); }
-  .spin-btn[disabled]{ opacity:.5; cursor:not-allowed; }
-  .status { font-size:13px; color:#d3d3e6; }
-  /* Lottie inserted temporary container should fill cell */
-  .temp-lottie { position:absolute; inset:0; z-index:5; pointer-events:none; display:flex; align-items:center; justify-content:center; }
-  .cell-svg > svg { width:100%; height:100%; display:block; }
+  .reel-window {
+    width:var(--cell-size);
+    height:var(--cell-size);
+    overflow:hidden;
+    border-radius:12px;
+    background:#111;
+    box-shadow:0 6px 18px rgba(0,0,0,.6);
+  }
+  .reel-strip { will-change:transform; }
+  .cell {
+    width:var(--cell-size);
+    height:var(--cell-size);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+  }
+  .cell svg { width:100%; height:100%; }
+  .label {
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:600;
+    font-size:13px;
+    color:#e5e5e5;
+    text-align:center;
+    padding:6px;
+  }
+  .overlay {
+    position:absolute;
+    inset:0;
+    z-index:10; /* выше барабанов */
+    pointer-events:none;
+  }
+  .controls { margin-top:20px; }
+  button {
+    padding:12px 28px;
+    border:0;
+    border-radius:10px;
+    background:linear-gradient(90deg,#7c3aed,#ec4899);
+    color:#fff;
+    font-size:16px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  button[disabled]{opacity:.5;cursor:not-allowed;}
 </style>
 </head>
 <body>
-  <div class="app">
-    <div class="machine" id="machine">
-      <div class="reels" id="reels"></div>
-      <div class="machine-overlay" id="machine-overlay"></div>
-    </div>
-
-    <div class="controls">
-      <button id="spin" class="spin-btn" disabled>Загрузка...</button>
-      <div id="status" class="status">Инициализация...</div>
-    </div>
+  <div class="machine">
+    <div class="reels" id="reels"></div>
+    <div class="overlay" id="overlay"></div>
+  </div>
+  <div class="controls">
+    <button id="spin" disabled>Загрузка...</button>
   </div>
 
 <script>
-/* ========= Конфигурация ========== */
-const ITEM_SIZE = 120;
-const REEL_COUNT = 3;
-const REPEAT_COUNT = 40;              // много повторов чтобы не было пустых зон
-const STOP_TIMES = [1000, 1500, 2000]; // ms: 1s, 1.5s, 2s
-const MIN_EXTRA_TURNS = 5;
-const MAX_EXTRA_TURNS = 10;
-const EASE_MS = 500;                  // easing при остановке
-const ANIM_AFTER_STOP_DELAY = 300;    // показываем статичный 0.3s перед проигрышем Lottie
-const MACHINE_JSON = "assets/777.json";
+(async function(){
+  const CELL = 120;
+  const REELS = 3;
+  const gifts = [
+    {name:"Desk Calendar", file:"assets/gifts/Desk Calendar.json"},
+    {name:"B-Day Candle", file:"assets/gifts/B-Day Candle.json"},
+    {name:"Lol Pop", file:"assets/gifts/Lol Pop.json"}
+  ];
 
-/* ========= Подарки (имена должны совпадать с файлами) ========= */
-const gifts = [
-  { name: "Desk Calendar", file: "assets/gifts/Desk Calendar.json" },
-  { name: "B-Day Candle", file: "assets/gifts/B-Day Candle.json" },
-  { name: "Lol Pop", file: "assets/gifts/Lol Pop.json" }
-];
+  const reelsRoot=document.getElementById("reels");
+  const overlay=document.getElementById("overlay");
+  const spinBtn=document.getElementById("spin");
+  let overlayAnim=null;
 
-/* ========= DOM ========= */
-const reelsRoot = document.getElementById('reels');
-const overlay = document.getElementById('machine-overlay');
-const spinBtn = document.getElementById('spin');
-const statusEl = document.getElementById('status');
-
-/* ========= State ========= */
-let staticSvgs = new Array(gifts.length).fill(null); // freeze HTML per gift
-let reels = []; // { stripEl, cells[], pos, totalItems, totalHeight }
-let machineAnim = null;
-let spinInProgress = false;
-
-/* ========= Утилиты ========= */
-function positiveMod(n, m) { return ((n % m) + m) % m; }
-function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
-async function urlExists(url) {
-  try {
-    const r = await fetch(url, { method: 'GET' });
-    return r.ok;
-  } catch (e) { return false; }
-}
-
-/* Предзагрузка первого кадра (freeze) — возвращает HTML (svg) или null */
-async function preloadFirstFrame(path) {
-  return new Promise(resolve => {
-    const tmp = document.createElement('div');
-    tmp.style.cssText = `position:fixed;left:-9999px;top:-9999px;width:${ITEM_SIZE}px;height:${ITEM_SIZE}px;`;
-    document.body.appendChild(tmp);
-    let anim;
-    try {
-      anim = lottie.loadAnimation({ container: tmp, renderer: 'svg', loop: false, autoplay: false, path });
-    } catch (e) {
-      if (document.body.contains(tmp)) document.body.removeChild(tmp);
-      return resolve(null);
-    }
-    let ticks = 0;
-    const check = setInterval(() => {
-      ticks++;
-      const svg = tmp.querySelector('svg');
-      if (svg || ticks > 200) {
-        clearInterval(check);
-        try { anim.goToAndStop(0, true); } catch(e) {}
-        setTimeout(() => {
-          const html = tmp.innerHTML || null;
-          try { anim.destroy(); } catch(e) {}
-          if (document.body.contains(tmp)) document.body.removeChild(tmp);
-          resolve(html);
-        }, 30);
-      }
-    }, 15);
-    setTimeout(() => {
-      clearInterval(check);
-      try { if (anim) anim.destroy(); } catch(e){}
-      if (document.body.contains(tmp)) document.body.removeChild(tmp);
-      resolve(null);
-    }, 5000);
-  });
-}
-
-/* Проигрывает Lottie в отдельном временном контейнере поверх ячейки; возвращает Promise */
-function playLottieOnCell(cellObj, path) {
-  return new Promise(async (resolve) => {
-    const cellEl = cellObj.cellEl;
-    // создаём временный контейнер поверх статичного SVG
-    const temp = document.createElement('div');
-    temp.className = 'temp-lottie';
-    // make sure it sits above static svg
-    temp.style.zIndex = 5;
-    cellEl.appendChild(temp);
-
-    // safety: проверь файл
-    try {
-      const ok = await urlExists(path);
-      if (!ok) {
-        // ничего не делаем — удаляем контейнер
-        temp.remove();
-        return resolve();
-      }
-    } catch (e) { temp.remove(); return resolve(); }
-
-    let anim;
-    try {
-      anim = lottie.loadAnimation({ container: temp, renderer: 'svg', loop: false, autoplay: true, path });
-    } catch (e) {
-      temp.remove();
-      return resolve();
-    }
-
-    const onComplete = () => {
-      try { anim.destroy(); } catch (e) {}
-      temp.remove();
-      resolve();
-    };
-    anim.addEventListener('complete', onComplete);
-
-    // safety timeout: если анимация не завершится, удалим её через 8s
-    setTimeout(() => {
-      try { if (anim) anim.destroy(); } catch (e) {}
-      if (temp.parentElement) temp.remove();
-      resolve();
-    }, 8000);
-  });
-}
-
-/* ========= Постройка интерфейса (предзагрузка freeze) ========= */
-async function buildUI() {
-  statusEl.textContent = 'Предзагрузка статичных кадров...';
-  spinBtn.disabled = true;
-
-  // preload freeze frames
-  for (let i = 0; i < gifts.length; i++) {
-    try { staticSvgs[i] = await preloadFirstFrame(gifts[i].file); }
-    catch (e) { staticSvgs[i] = null; }
-  }
-
-  // build reel DOMs
-  reelsRoot.innerHTML = '';
-  reels = [];
-  for (let r = 0; r < REEL_COUNT; r++) {
-    const windowEl = document.createElement('div');
-    windowEl.className = 'slot-window';
-    const stripEl = document.createElement('div');
-    stripEl.className = 'slot-strip';
-    windowEl.appendChild(stripEl);
-    reelsRoot.appendChild(windowEl);
-
-    const cells = [];
-    // repeat many times to avoid gaps
-    for (let rep = 0; rep < REPEAT_COUNT; rep++) {
-      for (let gi = 0; gi < gifts.length; gi++) {
-        const cell = document.createElement('div');
-        cell.className = 'slot-cell';
-        const svgContainer = document.createElement('div');
-        svgContainer.className = 'cell-svg';
-        const label = document.createElement('div');
-        label.className = 'cell-label';
-        label.textContent = gifts[gi].name;
-
-        if (staticSvgs[gi]) {
-          svgContainer.innerHTML = staticSvgs[gi];
-          label.style.display = 'none';
-        } else {
-          svgContainer.innerHTML = '';
-          label.style.display = 'flex';
+  // предзагрузка freeze-кадров с таймаутом
+  async function preloadFrame(path){
+    return new Promise(res=>{
+      const tmp=document.createElement("div");
+      tmp.style.cssText="position:fixed;left:-9999px;top:-9999px;width:"+CELL+"px;height:"+CELL+"px";
+      document.body.appendChild(tmp);
+      let done=false;
+      let anim=lottie.loadAnimation({container:tmp,renderer:"svg",loop:false,autoplay:false,path});
+      anim.addEventListener("DOMLoaded",()=>{
+        if(done) return;
+        done=true;
+        anim.goToAndStop(0,true);
+        setTimeout(()=>{
+          res(tmp.innerHTML);
+          anim.destroy();
+          tmp.remove();
+        },50);
+      });
+      setTimeout(()=>{
+        if(!done){
+          done=true;
+          try{anim.destroy()}catch{}
+          tmp.remove();
+          res(null);
         }
-
-        cell.appendChild(svgContainer);
-        cell.appendChild(label);
-        stripEl.appendChild(cell);
-        cells.push({ cellEl: cell, svgContainer, label, giftIndex: gi });
-      }
-    }
-
-    const totalItems = cells.length;
-    const totalHeight = totalItems * ITEM_SIZE;
-    // initial position aligned to a cell (random)
-    const initialIndex = Math.floor(Math.random() * totalItems);
-    const initialPos = initialIndex * ITEM_SIZE;
-    stripEl.style.transform = `translateY(-${initialPos}px)`;
-
-    reels.push({ stripEl, cells, pos: initialPos, totalItems, totalHeight });
-  }
-
-  // load machine overlay (autoplay false). We want to play it only during spin.
-  statusEl.textContent = 'Загрузка анимации автомата...';
-  try {
-    if (await urlExists(MACHINE_JSON)) {
-      try {
-        machineAnim = lottie.loadAnimation({ container: overlay, renderer: 'svg', loop: true, autoplay: false, path: MACHINE_JSON });
-      } catch (e) { machineAnim = null; }
-    } else {
-      machineAnim = null;
-    }
-  } catch (e) { machineAnim = null; }
-
-  statusEl.textContent = 'Готово';
-  spinBtn.disabled = false;
-}
-
-await buildUI();
-
-/* ========= Spin logic ========= */
-let globalTimeoutIds = []; // чтобы чистить
-function clearAllScheduled() {
-  globalTimeoutIds.forEach(id => clearTimeout(id));
-  globalTimeoutIds = [];
-}
-
-/* Start continuous spinning loop for visual while waiting for stop time */
-function startContinuousSpin() {
-  // each reel gets its rAF loop that increments pos
-  reels.forEach(reel => {
-    // if any previous raf exists, cancel
-    if (reel._rafId) { cancelAnimationFrame(reel._rafId); reel._rafId = null; }
-    reel._running = true;
-    let last = null;
-    const speedPxPerMs = 0.9; // pixels per ms (tune to look good)
-    function loop(ts) {
-      if (!reel._running) { last = null; reel._rafId = null; return; }
-      if (!last) last = ts;
-      const dt = ts - last; last = ts;
-      reel.pos += speedPxPerMs * dt;
-      // keep pos from growing huge
-      if (reel.pos > 1e12) reel.pos = positiveMod(reel.pos, reel.totalHeight);
-      const rel = positiveMod(reel.pos, reel.totalHeight);
-      reel.stripEl.style.transform = `translateY(-${rel}px)`;
-      reel._rafId = requestAnimationFrame(loop);
-    }
-    reel._rafId = requestAnimationFrame(loop);
-  });
-}
-
-/* Stop a given reel at appropriate time: returns Promise resolved with visible stopped cell object */
-function stopReelAt(reelIndex, finalGiftIndex) {
-  return new Promise(resolve => {
-    const reel = reels[reelIndex];
-
-    // stop continuous rAF loop
-    if (reel._rafId) { cancelAnimationFrame(reel._rafId); reel._rafId = null; }
-    reel._running = false;
-
-    // compute current absolute index and target
-    const currentIndexAbs = Math.floor(reel.pos / ITEM_SIZE);
-    const totalGifts = gifts.length;
-    const currentGiftIndex = positiveMod(currentIndexAbs, totalGifts);
-    let delta = (finalGiftIndex - currentGiftIndex + totalGifts) % totalGifts;
-    if (delta === 0) delta = totalGifts;
-
-    // pick extra turns between min and max
-    const extraTurns = randInt(MIN_EXTRA_TURNS, MAX_EXTRA_TURNS);
-    const targetIndexAbs = currentIndexAbs + delta + extraTurns * totalGifts;
-    const targetPos = targetIndexAbs * ITEM_SIZE;
-    const startPos = reel.pos;
-    const t0 = performance.now();
-
-    // easing rAF to exactly targetPos
-    function easeStep(now) {
-      const t = Math.min(1, (now - t0) / EASE_MS);
-      const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
-      reel.pos = startPos + (targetPos - startPos) * eased;
-      const rel = positiveMod(reel.pos, reel.totalHeight);
-      reel.stripEl.style.transform = `translateY(-${rel}px)`;
-      if (t < 1) {
-        reel._easeRaf = requestAnimationFrame(easeStep);
-      } else {
-        // finalize: normalize to an occurrence inside DOM
-        const normalizedIndex = positiveMod(targetIndexAbs, reel.totalItems);
-        reel.pos = normalizedIndex * ITEM_SIZE;
-        const relFinal = positiveMod(reel.pos, reel.totalHeight);
-        reel.stripEl.style.transform = `translateY(-${relFinal}px)`;
-        // return the stopped visible cell (object)
-        const stoppedCell = reel.cells[normalizedIndex];
-        // cleanup any ease raf handle
-        if (reel._easeRaf) { cancelAnimationFrame(reel._easeRaf); reel._easeRaf = null; }
-        resolve(stoppedCell);
-      }
-    }
-
-    reel._easeRaf = requestAnimationFrame(easeStep);
-  });
-}
-
-/* Main spin routine */
-spinBtn.addEventListener('click', async () => {
-  if (spinInProgress) return;
-  spinInProgress = true;
-  spinBtn.disabled = true;
-  statusEl.textContent = 'Крутим...';
-  clearAllScheduled();
-
-  // start machine animation (plays looping while spinning)
-  try { if (machineAnim) machineAnim.play(); } catch (e) {}
-
-  // pick final gift indices (could later come from server)
-  const finals = Array.from({length: REEL_COUNT}, () => Math.floor(Math.random() * gifts.length));
-
-  // start continuous spin for all reels simultaneously
-  startContinuousSpin();
-
-  // schedule stop times: for each reel, at STOP_TIMES[r] begin easing and stop
-  const stopPromises = [];
-  for (let r = 0; r < REEL_COUNT; r++) {
-    const delay = STOP_TIMES[r];
-    const p = new Promise(resolve => {
-      const id = setTimeout(async () => {
-        // begin stop for reel r
-        try {
-          const stoppedCell = await stopReelAt(r, finals[r]);
-          resolve(stoppedCell);
-        } catch (e) {
-          resolve(null);
-        }
-      }, delay);
-      globalTimeoutIds.push(id);
+      },3000);
     });
-    stopPromises.push(p);
   }
 
-  // wait until all reels stopped (they stop at their times)
-  const stoppedCells = await Promise.all(stopPromises);
-
-  // keep static visuals visible an extra 0.3s to avoid flicker, then play gift animations all at once
-  await new Promise(res => setTimeout(res, ANIM_AFTER_STOP_DELAY));
-
-  // play animations for all stopped cells in parallel (if any)
-  const playPromises = [];
-  for (let i = 0; i < REEL_COUNT; i++) {
-    const cellObj = stoppedCells[i];
-    if (!cellObj) continue;
-    // ensure static freeze still present in svgContainer (we didn't remove it)
-    // play Lottie in overlay container above static
-    playPromises.push(playLottieOnCell(cellObj, gifts[i /* finals[i]? careful: finals array holds gift indices per reel */].file));
+  const freezes=[];
+  for(let g of gifts){
+    try{
+      freezes.push(await preloadFrame(g.file));
+    }catch{
+      freezes.push(null);
+    }
   }
 
-  // Wait for all gift animes to finish
-  await Promise.all(playPromises);
-
-  // stop machine animation (don't auto-restart)
-  try { if (machineAnim) machineAnim.stop(); } catch (e) {}
-
-  statusEl.textContent = 'Готово';
-  spinBtn.disabled = false;
-  spinInProgress = false;
-
-  // Optional: show win if triple
-  if (finals.every(v => v === finals[0])) {
-    setTimeout(()=>alert('🎉 Вы выиграли: ' + gifts[finals[0]].name), 120);
+  // строим барабаны
+  const reels=[];
+  for(let r=0;r<REELS;r++){
+    const win=document.createElement("div");
+    win.className="reel-window";
+    const strip=document.createElement("div");
+    strip.className="reel-strip";
+    win.appendChild(strip);
+    reelsRoot.appendChild(win);
+    const cells=[];
+    for(let i=0;i<30;i++){
+      for(let gi=0;gi<gifts.length;gi++){
+        const cell=document.createElement("div");
+        cell.className="cell";
+        const svgC=document.createElement("div");
+        if(freezes[gi]) svgC.innerHTML=freezes[gi];
+        const label=document.createElement("div");
+        label.className="label";
+        label.textContent=gifts[gi].name;
+        if(freezes[gi]) label.style.display="none";
+        cell.appendChild(svgC);
+        cell.appendChild(label);
+        strip.appendChild(cell);
+        cells.push({el:cell,svg:svgC,gift:gi});
+      }
+    }
+    reels.push({strip,cells,pos:0});
   }
-});
 
-/* Safety: if user reloads / builds again, make sure no orphaned RAF/timeouts remain */
+  // overlay автомат
+  try{
+    overlayAnim=lottie.loadAnimation({container:overlay,renderer:"svg",loop:false,autoplay:false,path:"assets/777.json"});
+  }catch{}
 
-/* End of script */
+  spinBtn.disabled=false;
+  spinBtn.textContent="SPIN";
+
+  let spinning=false;
+  spinBtn.onclick=()=>{
+    if(spinning) return;
+    spinning=true; spinBtn.disabled=true;
+
+    // запускаем анимацию автомата
+    try{overlayAnim.stop();overlayAnim.play()}catch{}
+
+    const results=Array.from({length:REELS},()=>Math.floor(Math.random()*gifts.length));
+    const stopDelays=[1000,1500,2000]; // задержки остановки
+
+    let finished=0;
+    const stoppedCells=[];
+
+    for(let r=0;r<REELS;r++){
+      spinReel(r,results[r],stopDelays[r],cell=>{
+        stoppedCells[r]=cell;
+        finished++;
+        if(finished===REELS){
+          // запускаем анимации только после полной остановки
+          for(let i=0;i<REELS;i++){
+            const gi=results[i];
+            playOnce(stoppedCells[i].svg,gifts[gi].file,freezes[gi]);
+          }
+          spinBtn.disabled=false;
+          spinning=false;
+        }
+      });
+    }
+  };
+
+  function spinReel(idx,targetGift,stopDelay,cb){
+    const reel=reels[idx];
+    let duration=stopDelay;
+    let start=performance.now();
+    let from=reel.pos;
+
+    const total=gifts.length;
+    const currentIndex=Math.floor(from/CELL)%total;
+    let delta=(targetGift-currentIndex+total)%total;
+    if(delta===0) delta=total;
+
+    const extraTurns=5+Math.floor(Math.random()*6);
+    let targetIndex=currentIndex+delta+total*extraTurns;
+    let to=targetIndex*CELL;
+
+    function frame(t){
+      let p=Math.min(1,(t-start)/duration);
+      let ease=1-Math.pow(1-p,3);
+      reel.pos=from+(to-from)*ease;
+      reel.strip.style.transform=`translateY(-${reel.pos}px)`;
+      if(p<1){ requestAnimationFrame(frame); }
+      else {
+        reel.pos=to;
+        reel.strip.style.transform=`translateY(-${reel.pos}px)`;
+        const cell=reel.cells[targetIndex%reel.cells.length];
+        cb(cell);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function playOnce(container,path,freeze){
+    if(!container) return;
+    container.innerHTML="";
+    const anim=lottie.loadAnimation({container,renderer:"svg",loop:false,autoplay:true,path});
+    let finished=false;
+    anim.addEventListener("complete",()=>{
+      if(finished) return;
+      finished=true;
+      setTimeout(()=>{
+        anim.destroy();
+        if(freeze) container.innerHTML=freeze;
+      },300);
+    });
+    setTimeout(()=>{
+      if(!finished){
+        finished=true;
+        try{anim.destroy()}catch{}
+        if(freeze) container.innerHTML=freeze;
+      }
+    },6000);
+  }
+})();
 </script>
 </body>
 </html>
